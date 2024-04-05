@@ -2,6 +2,14 @@
 
 > SAT solver based on rho-backdoors.
 
+## Instructions
+
+```sh
+git clone https://github.com/Lipen/backdoor-solver
+cd backdoor-solver
+git submodule update --init --recursive
+```
+
 ## SAT solver
 
 > SAT solver that interleaves CaDiCaL with clauses derivation procedures utilizing rho-backdoors.
