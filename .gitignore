@@ -1,0 +1,21 @@
+.idea/
+.vscode/
+target/
+Cargo.lock
+
+*.dll
+*.so
+*.a
+
+# Local
+data
+stuff
+_bindings*.rs
+*.txt
+*.svg
+*.png
+*.pdf
+*.csv
+*.cnf
+perf.data
+perf.data.old

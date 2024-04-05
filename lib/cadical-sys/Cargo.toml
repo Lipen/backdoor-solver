@@ -1,0 +1,20 @@
+[package]
+name = "cadical-sys"
+version = "0.1.0"
+authors = ["Konstantin Chukharev <lipen00@gmail.com>"]
+edition = "2021"
+
+[features]
+default = []
+dynamic = ["libloading", "once_cell"]
+static = ["cc", "glob"]
+
+[dependencies]
+libloading = { version = "0.8", optional = true }
+once_cell = { version = "1.19", optional = true }
+
+[build-dependencies]
+build_script = "0.2.0"
+bindgen = "0.69"
+cc = { version = "1.0", features = ["parallel"], optional = true }
+glob = { version = "0.3", optional = true }

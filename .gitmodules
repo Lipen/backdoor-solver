@@ -1,0 +1,4 @@
+[submodule "cadical"]
+	path = lib/cadical-sys/vendor/cadical
+	url = https://github.com/Lipen/cadical
+    branch = lipen/1.9.5
