@@ -29,7 +29,7 @@ Options:
 Search for 3 backdoors, each of size 10, using 1000 iterations of EA and the random seed 42 (default):
 
 ```sh
-cargo run -p backdoor --bin search --release -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 1000 --num-runs 3 --seed 42 --results output.txt
+cargo run --release --bin search -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 1000 --num-runs 3 --seed 42 --output output.txt
 ```
 
 `output.txt` might look like:
