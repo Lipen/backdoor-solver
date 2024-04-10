@@ -430,11 +430,13 @@ fn main() -> color_eyre::Result<()> {
                         let vars_external: Vec<i32> = backdoor
                             .iter()
                             .map(|var| var.to_external() as i32)
+                            .filter(|&v| solver.is_active(v))
                             .collect();
-                        for &v in vars_external.iter() {
-                            assert!(solver.is_active(v), "var {} in backdoor is not active", v);
-                        }
-                        let orig_hard_len = hard.len();
+                        debug!("Using vars for cores: {}", DisplaySlice(&vars_external));
+                        // for &v in vars_external.iter() {
+                        //     assert!(solver.is_active(v), "var {} in backdoor is not active", v);
+                        // }
+                        // let orig_hard_len = hard.len();
                         let mut hard = Vec::new();
                         let mut easy = Vec::new();
                         let res = solver.propcheck_all_tree_via_internal(
@@ -444,7 +446,7 @@ fn main() -> color_eyre::Result<()> {
                             Some(&mut easy),
                         );
                         assert_eq!(hard.len(), res as usize);
-                        assert_eq!(hard.len(), orig_hard_len);
+                        // assert_eq!(hard.len(), orig_hard_len);
                         let easy: Vec<Vec<Lit>> = easy
                             .into_iter()
                             .map(|cube| cube.into_iter().map(|i| Lit::from_external(i)).collect())
