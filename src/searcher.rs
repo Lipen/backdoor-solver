@@ -321,8 +321,9 @@ impl BackdoorSearcher {
     fn mutate(&mut self, instance: &mut Backdoor, pool: &[Var]) {
         assert!(pool.len() >= instance.len());
 
-        if pool.len() - instance.len() >= instance.len() {
-            let n = instance.len();
+        let n = instance.len();
+        let m = pool.len() - n;
+        if m >= n {
             let p = 1.0 / n as f64;
             let d = Bernoulli::new(p).unwrap();
 
@@ -345,15 +346,11 @@ impl BackdoorSearcher {
             for (i, &v) in zip_eq(to_replace, substituted) {
                 instance.variables[i] = v;
             }
-
-            // Instance size should stay the same:
-            assert_eq!(instance.len(), n);
         } else {
-            let n = pool.len() - instance.len();
-            if n == 0 {
+            if m == 0 {
                 return;
             }
-            let p = 1.0 / n as f64;
+            let p = 1.0 / m as f64;
             let d = Bernoulli::new(p).unwrap();
 
             let mut to_replace = Vec::new();
@@ -365,16 +362,16 @@ impl BackdoorSearcher {
                     to_replace.push(v);
                 }
             }
-            // to_replace.len() ~ Bin(1/n)
-            assert!(to_replace.len() <= n);
+            // to_replace.len() ~ Bin(1/m)
+            assert!(to_replace.len() <= m);
 
             let substituted = (0..instance.len()).choose_multiple(&mut self.rng, to_replace.len());
             for (i, v) in zip_eq(substituted, to_replace) {
                 instance.variables[i] = v;
             }
-
-            // Instance size should stay the same:
-            assert_eq!(instance.len(), n);
         }
+
+        // Instance size should stay the same:
+        assert_eq!(instance.len(), n);
     }
 }
