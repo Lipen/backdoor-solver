@@ -174,18 +174,20 @@ fn main() -> color_eyre::Result<()> {
     // All derived clauses:
     let mut all_derived_clauses: Vec<Vec<Lit>> = Vec::new();
 
+    let mut _sat = false;
+    let mut _unsat = false;
+
     if args.budget_presolve > 0 {
         info!(
             "Pre-solving with {} conflicts budget...",
             args.budget_presolve
         );
-        match &mut searcher.solver {
+        match &searcher.solver {
             SatSolver::Cadical(solver) => {
                 solver.limit("conflicts", args.budget_presolve as i32);
                 let time_solve = Instant::now();
                 let res = solver.solve().unwrap();
                 let time_solve = time_solve.elapsed();
-                solver.internal_backtrack(0);
                 match res {
                     SolveResponse::Interrupted => {
                         info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
@@ -193,20 +195,14 @@ fn main() -> color_eyre::Result<()> {
                     }
                     SolveResponse::Unsat => {
                         info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
-                        panic!("Unexpected UNSAT during pre-solve");
+                        _unsat = true;
                     }
                     SolveResponse::Sat => {
                         info!("SAT in {:.1} s", time_solve.as_secs_f64());
-                        panic!("Unexpected SAT during pre-solve");
+                        _sat = true;
                     }
                 }
-            }
-        }
-
-        match &searcher.solver {
-            SatSolver::Cadical(solver) => {
-                let res = solver.internal_propagate();
-                assert!(res);
+                solver.internal_backtrack(0);
             }
         }
     }
@@ -262,6 +258,10 @@ fn main() -> color_eyre::Result<()> {
     }
 
     for run_number in 1..=args.num_runs {
+        if _sat || _unsat {
+            break;
+        }
+
         info!("Run {} / {}", run_number, args.num_runs);
         let time_run = Instant::now();
 
