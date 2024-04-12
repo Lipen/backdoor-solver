@@ -109,6 +109,10 @@ struct Cli {
     /// Budget (in conflicts) for pre-solve.
     #[arg(long, value_name = "INT", default_value_t = 0)]
     budget_presolve: u64,
+
+    /// Do perform checking?
+    #[arg(long)]
+    check: bool,
 }
 
 fn main() -> color_eyre::Result<()> {
@@ -362,139 +366,141 @@ fn main() -> color_eyre::Result<()> {
             );
         }
 
-        match &searcher.solver {
-            SatSolver::Cadical(solver) => {
-                let vars_external: Vec<i32> = backdoor
-                    .iter()
-                    .map(|var| var.to_external() as i32)
-                    .collect();
-                for &v in vars_external.iter() {
-                    assert!(solver.is_active(v), "var {} is not active", v);
-                }
-                let mut hard = Vec::new();
-                let mut easy = Vec::new();
-                let res = solver.propcheck_all_tree_via_internal(
-                    &vars_external,
-                    0,
-                    Some(&mut hard),
-                    Some(&mut easy),
-                );
-                assert_eq!(hard.len(), res as usize);
-                let easy: Vec<Vec<Lit>> = easy
-                    .into_iter()
-                    .map(|cube| cube.into_iter().map(|i| Lit::from_external(i)).collect())
-                    .collect();
-                debug!("Easy tasks: {}", easy.len());
-
-                let mut easy_cores: Vec<Vec<Lit>> = Vec::new();
-                for (i, cube) in easy.iter().enumerate() {
-                    let (res, _) = solver.propcheck(
-                        &cube.iter().map(|lit| lit.to_external()).collect_vec(),
-                        false,
-                        false,
-                        true,
+        if args.check {
+            match &searcher.solver {
+                SatSolver::Cadical(solver) => {
+                    let vars_external: Vec<i32> = backdoor
+                        .iter()
+                        .map(|var| var.to_external() as i32)
+                        .collect();
+                    for &v in vars_external.iter() {
+                        assert!(solver.is_active(v), "var {} is not active", v);
+                    }
+                    let mut hard = Vec::new();
+                    let mut easy = Vec::new();
+                    let res = solver.propcheck_all_tree_via_internal(
+                        &vars_external,
+                        0,
+                        Some(&mut hard),
+                        Some(&mut easy),
                     );
-                    if res {
-                        panic!("Unexpected SAT on cube = {}", DisplaySlice(&cube));
-                    } else {
-                        let mut core = solver
-                            .propcheck_get_core()
-                            .into_iter()
-                            .map(|i| Lit::from_external(i))
-                            .collect_vec();
-                        assert!(!core.is_empty());
-                        core.sort_by_key(|lit| lit.inner());
-                        debug!(
-                            "{}/{}: core = {} for cube = {}",
-                            i + 1,
-                            easy.len(),
-                            DisplaySlice(&core),
-                            DisplaySlice(cube)
+                    assert_eq!(hard.len(), res as usize);
+                    let easy: Vec<Vec<Lit>> = easy
+                        .into_iter()
+                        .map(|cube| cube.into_iter().map(|i| Lit::from_external(i)).collect())
+                        .collect();
+                    debug!("Easy tasks: {}", easy.len());
+
+                    let mut easy_cores: Vec<Vec<Lit>> = Vec::new();
+                    for (i, cube) in easy.iter().enumerate() {
+                        let (res, _) = solver.propcheck(
+                            &cube.iter().map(|lit| lit.to_external()).collect_vec(),
+                            false,
+                            false,
+                            true,
                         );
-                        assert_eq!(
-                            core.last().unwrap(),
-                            cube.last().unwrap(),
-                            "core.last() = {}, cube.last() = {}",
-                            core.last().unwrap(),
-                            cube.last().unwrap()
-                        );
+                        if res {
+                            panic!("Unexpected SAT on cube = {}", DisplaySlice(&cube));
+                        } else {
+                            let mut core = solver
+                                .propcheck_get_core()
+                                .into_iter()
+                                .map(|i| Lit::from_external(i))
+                                .collect_vec();
+                            assert!(!core.is_empty());
+                            core.sort_by_key(|lit| lit.inner());
+                            debug!(
+                                "{}/{}: core = {} for cube = {}",
+                                i + 1,
+                                easy.len(),
+                                DisplaySlice(&core),
+                                DisplaySlice(cube)
+                            );
+                            assert_eq!(
+                                core.last().unwrap(),
+                                cube.last().unwrap(),
+                                "core.last() = {}, cube.last() = {}",
+                                core.last().unwrap(),
+                                cube.last().unwrap()
+                            );
 
-                        if false {
-                            let lemma = core.iter().map(|&lit| -lit).collect_vec();
-                            let lits = &lemma;
+                            if false {
+                                let lemma = core.iter().map(|&lit| -lit).collect_vec();
+                                let lits = &lemma;
 
-                            solver.internal_backtrack(0);
+                                solver.internal_backtrack(0);
 
-                            let res = solver.internal_propagate();
-                            assert!(res);
+                                let res = solver.internal_propagate();
+                                assert!(res);
 
-                            let lits = clause_to_external(lits).collect_vec();
-                            if lits.len() >= 2 {
-                                for lit in lits {
-                                    assert!(solver.is_active(lit), "lit {} is not active", lit);
-                                    solver.add_derived(lit);
-                                }
-                                solver.add_derived(0);
-                            } else {
-                                let lit = lits[0];
-                                if solver.is_active(lit) {
-                                    solver.add_unit_clause(lit);
-                                    assert!(!solver.is_active(lit));
+                                let lits = clause_to_external(lits).collect_vec();
+                                if lits.len() >= 2 {
+                                    for lit in lits {
+                                        assert!(solver.is_active(lit), "lit {} is not active", lit);
+                                        solver.add_derived(lit);
+                                    }
+                                    solver.add_derived(0);
                                 } else {
-                                    log::warn!("unit {} is not active", lit);
+                                    let lit = lits[0];
+                                    if solver.is_active(lit) {
+                                        solver.add_unit_clause(lit);
+                                        assert!(!solver.is_active(lit));
+                                    } else {
+                                        log::warn!("unit {} is not active", lit);
+                                    }
                                 }
+
+                                let res = solver.internal_propagate();
+                                assert!(res);
                             }
 
-                            let res = solver.internal_propagate();
-                            assert!(res);
+                            easy_cores.push(core);
                         }
-
-                        easy_cores.push(core);
                     }
-                }
 
-                let easy_cores: HashSet<Vec<Lit>> = easy_cores.into_iter().collect();
-                debug!("Unique easy cores: {}", easy_cores.len());
-                for (i, core) in easy_cores.iter().enumerate() {
-                    debug!("[{}/{}]: {}", i + 1, easy_cores.len(), DisplaySlice(core));
+                    let easy_cores: HashSet<Vec<Lit>> = easy_cores.into_iter().collect();
+                    debug!("Unique easy cores: {}", easy_cores.len());
+                    for (i, core) in easy_cores.iter().enumerate() {
+                        debug!("[{}/{}]: {}", i + 1, easy_cores.len(), DisplaySlice(core));
 
-                    let lemma = core.iter().map(|&lit| -lit).collect_vec();
-                    solver.add_derived_clause(clause_to_external(&lemma));
-                }
+                        let lemma = core.iter().map(|&lit| -lit).collect_vec();
+                        solver.add_derived_clause(clause_to_external(&lemma));
+                    }
 
-                let hard: Vec<Vec<Lit>> = hard
-                    .into_iter()
-                    .map(|cube| cube.into_iter().map(|i| Lit::from_external(i)).collect())
-                    .collect();
-                debug!("Hard tasks: {}", hard.len());
-                for (i, cube) in hard.iter().enumerate() {
-                    debug!("[{}/{}]: {}", i + 1, hard.len(), DisplaySlice(cube));
-                }
+                    let hard: Vec<Vec<Lit>> = hard
+                        .into_iter()
+                        .map(|cube| cube.into_iter().map(|i| Lit::from_external(i)).collect())
+                        .collect();
+                    debug!("Hard tasks: {}", hard.len());
+                    for (i, cube) in hard.iter().enumerate() {
+                        debug!("[{}/{}]: {}", i + 1, hard.len(), DisplaySlice(cube));
+                    }
 
-                let time_derive = Instant::now();
-                let derived_clauses = derive_clauses(&hard, args.derive_ternary);
-                let time_derive = time_derive.elapsed();
-                info!(
-                    "Derived {} clauses ({} units, {} binary, {} other) for backdoor in {:.1}s",
-                    derived_clauses.len(),
-                    derived_clauses.iter().filter(|c| c.len() == 1).count(),
-                    derived_clauses.iter().filter(|c| c.len() == 2).count(),
-                    derived_clauses.iter().filter(|c| c.len() > 2).count(),
-                    time_derive.as_secs_f64()
-                );
-                debug!(
-                    "[{}]",
-                    derived_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
-                );
+                    let time_derive = Instant::now();
+                    let derived_clauses = derive_clauses(&hard, args.derive_ternary);
+                    let time_derive = time_derive.elapsed();
+                    info!(
+                        "Derived {} clauses ({} units, {} binary, {} other) for backdoor in {:.1}s",
+                        derived_clauses.len(),
+                        derived_clauses.iter().filter(|c| c.len() == 1).count(),
+                        derived_clauses.iter().filter(|c| c.len() == 2).count(),
+                        derived_clauses.iter().filter(|c| c.len() > 2).count(),
+                        time_derive.as_secs_f64()
+                    );
+                    debug!(
+                        "[{}]",
+                        derived_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
+                    );
 
-                info!("Checking (probing) derived clauses...");
-                for clause in derived_clauses.iter() {
-                    let cube = clause.iter().map(|lit| -lit.to_external()).collect_vec();
-                    let (res, _) = solver.propcheck(&cube, false, false, true);
-                    if res {
-                        info!("clause {} is not RUP", DisplaySlice(clause));
-                    } else {
-                        info!("clause {} has RUP", DisplaySlice(clause));
+                    info!("Checking (probing) derived clauses...");
+                    for clause in derived_clauses.iter() {
+                        let cube = clause.iter().map(|lit| -lit.to_external()).collect_vec();
+                        let (res, _) = solver.propcheck(&cube, false, false, true);
+                        if res {
+                            info!("clause {} is not RUP", DisplaySlice(clause));
+                        } else {
+                            info!("clause {} has RUP", DisplaySlice(clause));
+                        }
                     }
                 }
             }
