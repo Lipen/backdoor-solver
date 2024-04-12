@@ -273,7 +273,7 @@ fn main() -> color_eyre::Result<()> {
             "Pre-solving with {} conflicts budget...",
             args.budget_presolve
         );
-        match &mut searcher.solver {
+        match &searcher.solver {
             SatSolver::Cadical(solver) => {
                 solver.limit("conflicts", args.budget_presolve as i32);
                 let time_solve = Instant::now();
