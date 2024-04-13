@@ -78,9 +78,9 @@ struct Cli {
     #[arg(long, value_name = "INT", default_value_t = 0)]
     min_iter: usize,
 
-    /// Do dump records for each EA run?
-    #[arg(long)]
-    dump_records: bool,
+    /// Path to an output file with records.
+    #[arg(long = "records", value_name = "FILE")]
+    path_records: Option<PathBuf>,
 
     /// Do derive clauses from backdoors?
     #[arg(long)]
@@ -160,6 +160,15 @@ fn main() -> color_eyre::Result<()> {
 
     // Create and open the file with resulting backdoors:
     let mut file_backdoors = args.path_output.as_ref().map(create_line_writer);
+
+    // Create and open the file with records:
+    let mut file_records = if let Some(path) = &args.path_records {
+        let mut writer = csv::Writer::from_path(path)?;
+        writer.write_record(["iteration", "instance", "fitness", "num_hard", "rho"])?;
+        Some(writer)
+    } else {
+        None
+    };
 
     // Create and open the file with derived clauses:
     let mut file_derived_clauses = if args.dump_derived {
@@ -298,11 +307,9 @@ fn main() -> color_eyre::Result<()> {
         }
 
         // Write the run records:
-        if args.dump_records {
-            let mut writer = csv::Writer::from_path(format!("run_{}.csv", run_number))?;
-            writer.write_record(["iteration", "instance", "fitness", "num_hard", "rho"])?;
+        if let Some(f) = &mut file_records {
             for record in result.records {
-                writer.serialize((
+                f.serialize((
                     record.iteration,
                     record
                         .instance
