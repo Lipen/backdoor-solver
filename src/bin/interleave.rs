@@ -61,6 +61,10 @@ struct Cli {
     #[arg(long, value_name = "INT")]
     stagnation_limit: Option<usize>,
 
+    /// Timeout for each EA run.
+    #[arg(long, value_name = "FLOAT")]
+    timeout: Option<f64>,
+
     /// Daniil's propcheck-based heuristic.
     #[arg(long, value_name = "INT")]
     pool_limit: Option<usize>,
@@ -342,6 +346,7 @@ fn main() -> color_eyre::Result<()> {
             args.backdoor_size,
             args.num_iters,
             args.stagnation_limit,
+            args.timeout,
             Some(((1u64 << args.backdoor_size) - 1) as f64 / (1u64 << args.backdoor_size) as f64),
             0,
             args.pool_limit,

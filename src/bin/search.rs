@@ -42,6 +42,10 @@ struct Cli {
     #[arg(long, value_name = "INT", default_value_t = 1)]
     num_runs: usize,
 
+    /// Timeout for each EA run.
+    #[arg(long, value_name = "FLOAT")]
+    timeout: Option<f64>,
+
     /// Path to a output file with backdoors.
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     path_output: Option<PathBuf>,
@@ -271,15 +275,52 @@ fn main() -> color_eyre::Result<()> {
                 args.backdoor_size,
                 args.num_iters,
                 args.stagnation_limit,
+                args.timeout,
                 Some(args.max_rho),
                 args.min_iter,
                 args.pool_limit,
             )
             .unwrap();
-        assert!(
-            result.best_fitness.num_hard > 0,
-            "Found strong backdoor?!.."
-        );
+
+        // Write the best found backdoor to the output file:
+        if let Some(f) = &mut file_backdoors {
+            writeln!(
+                f,
+                "Backdoor {} of size {} on iter {} with fitness = {}, rho = {}, hard = {} in {:.3} ms",
+                result.best_instance,
+                result.best_instance.len(),
+                result.best_iteration,
+                result.best_fitness.value,
+                result.best_fitness.rho,
+                result.best_fitness.num_hard,
+                result.time.as_secs_f64() * 1000.0
+            )?;
+        }
+
+        // Write the run records:
+        if args.dump_records {
+            let mut writer = csv::Writer::from_path(format!("run_{}.csv", run_number))?;
+            writer.write_record(["iteration", "instance", "fitness", "num_hard", "rho"])?;
+            for record in result.records {
+                writer.serialize((
+                    record.iteration,
+                    record
+                        .instance
+                        .get_variables()
+                        .iter()
+                        .map(|v| v.to_external())
+                        .join(","),
+                    record.fitness.value,
+                    record.fitness.num_hard,
+                    record.fitness.rho,
+                ))?;
+            }
+        }
+
+        if result.best_fitness.num_hard == 0 {
+            info!("Found strong backdoor: {}", result.best_instance);
+            break;
+        }
 
         let backdoor = result.best_instance.get_variables();
         let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
@@ -564,41 +605,6 @@ fn main() -> color_eyre::Result<()> {
                 all_derived_clauses.iter().filter(|c| c.len() == 2).count(),
                 all_derived_clauses.iter().filter(|c| c.len() > 2).count()
             );
-        }
-
-        // Write the best found backdoor to the output file:
-        if let Some(f) = &mut file_backdoors {
-            writeln!(
-                f,
-                "Backdoor {} of size {} on iter {} with fitness = {}, rho = {}, hard = {} in {:.3} ms",
-                result.best_instance,
-                result.best_instance.len(),
-                result.best_iteration,
-                result.best_fitness.value,
-                result.best_fitness.rho,
-                result.best_fitness.num_hard,
-                result.time.as_secs_f64() * 1000.0
-            )?;
-        }
-
-        // Write the run records:
-        if args.dump_records {
-            let mut writer = csv::Writer::from_path(format!("run_{}.csv", run_number))?;
-            writer.write_record(["iteration", "instance", "fitness", "num_hard", "rho"])?;
-            for record in result.records {
-                writer.serialize((
-                    record.iteration,
-                    record
-                        .instance
-                        .get_variables()
-                        .iter()
-                        .map(|v| v.to_external())
-                        .join(","),
-                    record.fitness.value,
-                    record.fitness.num_hard,
-                    record.fitness.rho,
-                ))?;
-            }
         }
     }
 
