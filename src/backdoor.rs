@@ -30,14 +30,8 @@ impl Backdoor {
 
 impl Display for Backdoor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            // Note: "alternate" style (`{:#}`) shows the ordered set of variables:
-            let vars = self.get_variables();
-            write!(f, "{}", DisplaySlice(&vars))
-        } else {
-            // Note: variables are unordered
-            write!(f, "{}", DisplaySlice(&self.variables))
-        }
+        let vars = self.get_variables();
+        write!(f, "{}", DisplaySlice(&vars))
     }
 }
 
