@@ -164,7 +164,15 @@ fn main() -> color_eyre::Result<()> {
     // Create and open the file with records:
     let mut file_records = if let Some(path) = &args.path_records {
         let mut writer = csv::Writer::from_path(path)?;
-        writer.write_record(["run", "iteration", "instance", "fitness", "num_hard", "rho"])?;
+        writer.write_record([
+            "run",
+            "iteration",
+            "instance",
+            "fitness",
+            "num_hard",
+            "rho",
+            "time",
+        ])?;
         Some(writer)
     } else {
         None
@@ -321,6 +329,7 @@ fn main() -> color_eyre::Result<()> {
                     record.fitness.value,
                     record.fitness.num_hard,
                     record.fitness.rho,
+                    record.time.as_secs_f64(),
                 ))?;
             }
         }

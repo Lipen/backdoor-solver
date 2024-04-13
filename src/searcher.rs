@@ -71,6 +71,7 @@ pub struct Record {
     pub iteration: usize,
     pub instance: Backdoor,
     pub fitness: Fitness,
+    pub time: Duration,
 }
 
 impl BackdoorSearcher {
@@ -152,6 +153,8 @@ impl BackdoorSearcher {
             }
         }
 
+        let time_initial = Instant::now();
+
         // Create an initial instance:
         let mut instance = self.initial_instance(backdoor_size, &pool);
         debug!("Initial instance: {:#}", instance);
@@ -165,12 +168,15 @@ impl BackdoorSearcher {
         let mut best_instance = instance.clone();
         let mut best_fitness = fitness.clone();
 
+        let time_initial = time_initial.elapsed();
+
         // Store all results:
         let mut records = Vec::new();
         records.push(Record {
             iteration: 0,
             instance: instance.clone(),
             fitness: fitness.clone(),
+            time: time_initial,
         });
 
         // Count the stagnated iterations:
@@ -221,13 +227,6 @@ impl BackdoorSearcher {
             // Evaluate the mutated instance:
             let mutated_fitness = self.calculate_fitness(&mutated_instance, Some(&best_fitness));
 
-            // Save the record about the new instance:
-            records.push(Record {
-                iteration: i,
-                instance: mutated_instance.clone(),
-                fitness: mutated_fitness.clone(),
-            });
-
             let time_iter = time_iter.elapsed();
             if i <= 10
                 || (i < 1000 && i % 100 == 0)
@@ -244,6 +243,14 @@ impl BackdoorSearcher {
                     time_iter.as_secs_f64() * 1000.0
                 );
             }
+
+            // Save the record about the new instance:
+            records.push(Record {
+                iteration: i,
+                instance: mutated_instance.clone(),
+                fitness: mutated_fitness.clone(),
+                time: time_iter,
+            });
 
             // Update the best:
             if mutated_fitness < best_fitness {
