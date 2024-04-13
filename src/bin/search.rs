@@ -164,7 +164,7 @@ fn main() -> color_eyre::Result<()> {
     // Create and open the file with records:
     let mut file_records = if let Some(path) = &args.path_records {
         let mut writer = csv::Writer::from_path(path)?;
-        writer.write_record(["iteration", "instance", "fitness", "num_hard", "rho"])?;
+        writer.write_record(["run", "iteration", "instance", "fitness", "num_hard", "rho"])?;
         Some(writer)
     } else {
         None
@@ -310,6 +310,7 @@ fn main() -> color_eyre::Result<()> {
         if let Some(f) = &mut file_records {
             for record in result.records {
                 f.serialize((
+                    run_number,
                     record.iteration,
                     record
                         .instance
