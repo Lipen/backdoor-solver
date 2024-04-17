@@ -44,7 +44,7 @@ struct Cli {
 
     /// Timeout for each EA run.
     #[arg(long, value_name = "FLOAT")]
-    timeout: Option<f64>,
+    run_timeout: Option<f64>,
 
     /// Path to a output file with backdoors.
     #[arg(short = 'o', long = "output", value_name = "FILE")]
@@ -292,7 +292,7 @@ fn main() -> color_eyre::Result<()> {
                 args.backdoor_size,
                 args.num_iters,
                 args.stagnation_limit,
-                args.timeout,
+                args.run_timeout,
                 Some(args.max_rho),
                 args.min_iter,
                 args.pool_limit,
