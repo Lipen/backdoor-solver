@@ -119,6 +119,60 @@ struct Cli {
     check: bool,
 }
 
+fn print_stats(solver: &Cadical, prefix: &str) {
+    debug!("{}vars: {}", prefix, solver.vars());
+    debug!("{}active: {}", prefix, solver.active());
+    debug!("{}clauses: {}", prefix, solver.clauses_iter().count());
+    debug!(
+        "{}units: {}",
+        prefix,
+        solver.clauses_iter().filter(|c| c.len() == 1).count()
+    );
+    debug!(
+        "{}binary: {}",
+        prefix,
+        solver.clauses_iter().filter(|c| c.len() == 2).count()
+    );
+    debug!(
+        "{}ternary: {}",
+        prefix,
+        solver.clauses_iter().filter(|c| c.len() == 3).count()
+    );
+    debug!(
+        "{}large: {}",
+        prefix,
+        solver.clauses_iter().filter(|c| c.len() > 3).count()
+    );
+    debug!(
+        "{}all_clauses: {}",
+        prefix,
+        solver.all_clauses_iter().count()
+    );
+    debug!(
+        "{}all_units: {}",
+        prefix,
+        solver.all_clauses_iter().filter(|c| c.len() == 1).count()
+    );
+    debug!(
+        "{}all_binary: {}",
+        prefix,
+        solver.all_clauses_iter().filter(|c| c.len() == 2).count()
+    );
+    debug!(
+        "{}all_ternary: {}",
+        prefix,
+        solver.all_clauses_iter().filter(|c| c.len() == 3).count()
+    );
+    debug!(
+        "{}all_large: {}",
+        prefix,
+        solver.all_clauses_iter().filter(|c| c.len() > 3).count()
+    );
+    debug!("{}conflicts: {}", prefix, solver.conflicts());
+    debug!("{}decisions: {}", prefix, solver.decisions());
+    debug!("{}propagations: {}", prefix, solver.propagations());
+}
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     env_logger::Builder::from_env(
@@ -143,8 +197,16 @@ fn main() -> color_eyre::Result<()> {
             solver.freeze(lit).unwrap();
         }
     }
+
+    debug!("Initial Solver statistics:");
+    print_stats(&solver, "  initial ");
+
     solver.limit("conflicts", 0);
     solver.solve()?;
+
+    debug!("Solver statistics:");
+    print_stats(&solver, "  ");
+
     let solver = SatSolver::new_cadical(solver);
 
     // Create the pool of variables available for EA:
@@ -224,6 +286,9 @@ fn main() -> color_eyre::Result<()> {
                     }
                 }
                 solver.internal_backtrack(0);
+
+                debug!("Solver statistics after pre-solve:");
+                print_stats(solver, "  after pre-solve ");
             }
         }
     }
@@ -633,6 +698,13 @@ fn main() -> color_eyre::Result<()> {
             all_derived_clauses.iter().filter(|c| c.len() == 2).count(),
             all_derived_clauses.iter().filter(|c| c.len() > 2).count()
         );
+    }
+
+    match &searcher.solver {
+        SatSolver::Cadical(solver) => {
+            debug!("Final solver statistics:");
+            print_stats(&solver, "  final ");
+        }
     }
 
     println!("\nAll done in {:.3} s", start_time.elapsed().as_secs_f64());
