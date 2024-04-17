@@ -18,7 +18,7 @@ use backdoor::utils::{
 use backdoor::var::Var;
 
 use cadical::statik::Cadical;
-use cadical::SolveResponse;
+use cadical::{FixedResponse, SolveResponse};
 
 // Run this example:
 // cargo run --release --bin search -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 1000
@@ -121,7 +121,24 @@ struct Cli {
 
 fn print_stats(solver: &Cadical, prefix: &str) {
     debug!("{}vars: {}", prefix, solver.vars());
-    debug!("{}active: {}", prefix, solver.active());
+    // debug!("{}active: {}", prefix, solver.active());
+    debug!(
+        "{}active: {}",
+        prefix,
+        (1..=solver.vars() as i32)
+            .filter(|&v| solver.is_active(v))
+            .count()
+    );
+    debug!(
+        "{}fixed: {}",
+        prefix,
+        (1..=solver.vars() as i32)
+            .filter(|&v| match solver.fixed(v).unwrap() {
+                FixedResponse::Positive | FixedResponse::Negative => true,
+                FixedResponse::Unclear => false,
+            })
+            .count()
+    );
     debug!("{}clauses: {}", prefix, solver.clauses_iter().count());
     debug!(
         "{}units: {}",
@@ -170,6 +187,7 @@ fn print_stats(solver: &Cadical, prefix: &str) {
     );
     debug!("{}conflicts: {}", prefix, solver.conflicts());
     debug!("{}decisions: {}", prefix, solver.decisions());
+    debug!("{}restarts: {}", prefix, solver.restarts());
     debug!("{}propagations: {}", prefix, solver.propagations());
 }
 
