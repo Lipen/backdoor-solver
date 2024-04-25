@@ -306,11 +306,7 @@ impl Cadical {
             1 => Ok(FixedResponse::Positive),
             -1 => Ok(FixedResponse::Negative),
             0 => Ok(FixedResponse::Unclear),
-            invalid => InvalidResponseFixedSnafu {
-                lit,
-                value: invalid,
-            }
-            .fail(),
+            invalid => InvalidResponseFixedSnafu { lit, value: invalid }.fail(),
         }
     }
 
@@ -365,13 +361,7 @@ impl Cadical {
         }
     }
 
-    pub fn propcheck(
-        &self,
-        lits: &[i32],
-        restore: bool,
-        save_propagated: bool,
-        save_core: bool,
-    ) -> (bool, u64) {
+    pub fn propcheck(&self, lits: &[i32], restore: bool, save_propagated: bool, save_core: bool) -> (bool, u64) {
         unsafe {
             ccadical_propcheck_begin(self.ptr);
             for &lit in lits {
@@ -379,13 +369,7 @@ impl Cadical {
                 ccadical_propcheck_add(self.ptr, lit);
             }
             let mut num_propagated = 0;
-            let res = ccadical_propcheck(
-                self.ptr,
-                restore,
-                &mut num_propagated,
-                save_propagated,
-                save_core,
-            );
+            let res = ccadical_propcheck(self.ptr, restore, &mut num_propagated, save_propagated, save_core);
             (res, num_propagated)
         }
     }
@@ -454,11 +438,7 @@ pub struct ClausesIter {
 impl ClausesIter {
     pub unsafe fn new(ptr: CCadicalPtr, redundant: bool) -> Self {
         let length = ccadical_traverse_clauses(ptr, redundant);
-        Self {
-            ptr,
-            length,
-            index: 0,
-        }
+        Self { ptr, length, index: 0 }
     }
 }
 
@@ -701,11 +681,7 @@ impl Cadical {
             self.melt(v).unwrap()
         }
 
-        trace!(
-            "Checked {} cubes, found {} valid",
-            total_checked,
-            total_count
-        );
+        trace!("Checked {} cubes, found {} valid", total_checked, total_count);
         total_count
     }
 }

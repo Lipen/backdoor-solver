@@ -42,10 +42,7 @@ where
     let file = File::open(path)?;
     let capacity = 128 * 1024;
     if get_extension(path).unwrap() == "gz" {
-        Ok(Box::new(BufReader::with_capacity(
-            capacity,
-            GzDecoder::new(file),
-        )))
+        Ok(Box::new(BufReader::with_capacity(capacity, GzDecoder::new(file))))
     } else {
         Ok(Box::new(BufReader::with_capacity(capacity, file)))
     }
@@ -55,25 +52,21 @@ pub fn parse_dimacs<P>(path: P) -> impl Iterator<Item = Vec<Lit>>
 where
     P: AsRef<Path>,
 {
-    read_maybe_gzip(path)
-        .unwrap()
-        .lines()
-        .map_while(Result::ok)
-        .filter_map(|line| {
-            if line.is_empty() {
-                trace!("Skipping empty line");
-                None
-            } else if line.starts_with('c') {
-                trace!("Skipping comment '{}'", line);
-                None
-            } else if line.starts_with('p') {
-                trace!("Skipping header '{}'", line);
-                None
-            } else {
-                let clause = parse_dimacs_clause(&line);
-                Some(clause)
-            }
-        })
+    read_maybe_gzip(path).unwrap().lines().map_while(Result::ok).filter_map(|line| {
+        if line.is_empty() {
+            trace!("Skipping empty line");
+            None
+        } else if line.starts_with('c') {
+            trace!("Skipping comment '{}'", line);
+            None
+        } else if line.starts_with('p') {
+            trace!("Skipping header '{}'", line);
+            None
+        } else {
+            let clause = parse_dimacs_clause(&line);
+            Some(clause)
+        }
+    })
 }
 
 pub fn parse_dimacs_clause(s: &str) -> Vec<Lit> {
@@ -127,10 +120,7 @@ pub fn parse_comma_separated_intervals(input: &str) -> Vec<usize> {
 }
 
 pub fn get_hard_tasks(variables: &[Var], solver: &Cadical) -> Vec<Vec<Lit>> {
-    let vars_external: Vec<i32> = variables
-        .iter()
-        .map(|var| var.to_external() as i32)
-        .collect();
+    let vars_external: Vec<i32> = variables.iter().map(|var| var.to_external() as i32).collect();
     // let res = solver.propcheck_all_tree(&vars_external, 0, true);
     // let valid = solver.propcheck_all_tree_get_valid();
     let mut valid = Vec::new();
@@ -142,10 +132,7 @@ pub fn get_hard_tasks(variables: &[Var], solver: &Cadical) -> Vec<Vec<Lit>> {
         .collect()
 }
 
-pub fn partition_tasks_cadical(
-    variables: &[Var],
-    solver: &Cadical,
-) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>) {
+pub fn partition_tasks_cadical(variables: &[Var], solver: &Cadical) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>) {
     partition_tasks_with(variables, |cube| {
         let cube: Vec<i32> = cube.iter().map(|lit| lit.to_external()).collect();
         // Note: `restore = false` is UNSAFE in general, but since the variables are active, it should be safe.
@@ -154,10 +141,7 @@ pub fn partition_tasks_cadical(
     })
 }
 
-pub fn partition_tasks_cadical_emulated(
-    variables: &[Var],
-    solver: &Cadical,
-) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>) {
+pub fn partition_tasks_cadical_emulated(variables: &[Var], solver: &Cadical) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>) {
     partition_tasks_with(variables, |cube| {
         let cube: Vec<i32> = cube.iter().map(|lit| lit.to_external()).collect();
         for &lit in cube.iter() {
@@ -178,10 +162,7 @@ pub fn partition_tasks_cadical_emulated(
     })
 }
 
-pub fn partition_tasks_with<F>(
-    variables: &[Var],
-    mut propcheck: F,
-) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>)
+pub fn partition_tasks_with<F>(variables: &[Var], mut propcheck: F) -> (Vec<Vec<Lit>>, Vec<Vec<Lit>>)
 where
     F: FnMut(&[Lit]) -> bool,
 {
@@ -189,9 +170,7 @@ where
     let mut easy = Vec::new();
 
     for cube in product_repeat([true, false].into_iter(), variables.len()) {
-        let assumptions = zip_eq(variables, cube)
-            .map(|(&v, s)| Lit::new(v, s))
-            .collect_vec();
+        let assumptions = zip_eq(variables, cube).map(|(&v, s)| Lit::new(v, s)).collect_vec();
         let result = propcheck(&assumptions);
         if result {
             hard.push(assumptions);
@@ -262,11 +241,7 @@ pub fn mask(base: &[Lit], data: &[Lit]) -> Vec<bool> {
     data.iter().map(|lit| !base.contains(&lit.var())).collect()
 }
 
-pub fn determine_vars_pool<P: AsRef<Path>>(
-    path: P,
-    allowed_vars: &Option<String>,
-    banned_vars: &Option<String>,
-) -> Vec<Var> {
+pub fn determine_vars_pool<P: AsRef<Path>>(path: P, allowed_vars: &Option<String>, banned_vars: &Option<String>) -> Vec<Var> {
     // Determine the set of variables encountered in CNF:
     let mut encountered_vars = HashSet::new();
     for clause in parse_dimacs(path) {
@@ -282,11 +257,7 @@ pub fn determine_vars_pool<P: AsRef<Path>>(
         } else {
             parse_multiple_comma_separated_intervals(banned_vars)
         };
-        let banned_vars: HashSet<Var> = chunks
-            .into_iter()
-            .flatten()
-            .map(|i| Var::from_external(i as u32))
-            .collect();
+        let banned_vars: HashSet<Var> = chunks.into_iter().flatten().map(|i| Var::from_external(i as u32)).collect();
         encountered_vars.retain(|v| !banned_vars.contains(v));
     }
 
@@ -297,11 +268,7 @@ pub fn determine_vars_pool<P: AsRef<Path>>(
         } else {
             parse_multiple_comma_separated_intervals(allowed_vars)
         };
-        let allowed_vars: HashSet<Var> = chunks
-            .into_iter()
-            .flatten()
-            .map(|i| Var::from_external(i as u32))
-            .collect();
+        let allowed_vars: HashSet<Var> = chunks.into_iter().flatten().map(|i| Var::from_external(i as u32)).collect();
         encountered_vars.retain(|v| allowed_vars.contains(v));
     }
 
@@ -419,12 +386,7 @@ pub fn propcheck_all_trie_via_internal(
                             solver.internal_assume_decision(0);
                             // Conflicting assignment:
                             if let Some(invalid) = &mut out_invalid {
-                                invalid.push(
-                                    zip_eq(vars, &cube)
-                                        .take(level + 1)
-                                        .map(|(&v, &s)| Lit::new(v, s))
-                                        .collect(),
-                                );
+                                invalid.push(zip_eq(vars, &cube).take(level + 1).map(|(&v, &s)| Lit::new(v, s)).collect());
                             }
                             state = State::Ascending;
                         } else {
@@ -493,11 +455,7 @@ pub fn propcheck_all_trie_via_internal(
     //     solver.melt(var.to_external() as i32).unwrap();
     // }
 
-    trace!(
-        "Checked {} cubes, found {} valid",
-        total_checked,
-        total_count
-    );
+    trace!("Checked {} cubes, found {} valid", total_checked, total_count);
     total_count
 }
 
@@ -570,11 +528,7 @@ mod tests {
         // Forbid (x1 AND ~x2)
         solver.add_clause([-x1, x2]);
 
-        info!(
-            "vars = {}, clauses = {}",
-            solver.vars(),
-            solver.clauses_iter().count()
-        );
+        info!("vars = {}, clauses = {}", solver.vars(), solver.clauses_iter().count());
 
         // Problem is satisfiable.
         // let res = solver.solve();
@@ -588,34 +542,18 @@ mod tests {
 
         info!("----------------------");
         let mut valid_tree = Vec::new();
-        let count_tree_internal =
-            solver.propcheck_all_tree_via_internal(&vars, 0, Some(&mut valid_tree), None);
+        let count_tree_internal = solver.propcheck_all_tree_via_internal(&vars, 0, Some(&mut valid_tree), None);
         info!("count_tree_internal = {}", count_tree_internal);
         assert_eq!(count_tree_internal, valid_tree.len() as u64);
 
         assert_eq!(count_tree, count_tree_internal);
 
         info!("----------------------");
-        let variables = vars
-            .iter()
-            .map(|&v| Var::from_external(v as u32))
-            .collect::<Vec<_>>();
-        let cubes = vec![
-            vec![false, false],
-            vec![true, true],
-            vec![true, false],
-            vec![false, true],
-        ];
+        let variables = vars.iter().map(|&v| Var::from_external(v as u32)).collect::<Vec<_>>();
+        let cubes = vec![vec![false, false], vec![true, true], vec![true, false], vec![false, true]];
         let trie = build_trie(&cubes);
         let mut valid_trie = Vec::new();
-        let count_trie_internal = propcheck_all_trie_via_internal(
-            &solver,
-            &variables,
-            &trie,
-            0,
-            Some(&mut valid_trie),
-            None,
-        );
+        let count_trie_internal = propcheck_all_trie_via_internal(&solver, &variables, &trie, 0, Some(&mut valid_trie), None);
         info!("count_trie_internal = {}", count_trie_internal);
         assert_eq!(count_trie_internal, valid_trie.len() as u64);
 

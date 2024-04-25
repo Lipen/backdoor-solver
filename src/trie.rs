@@ -110,11 +110,7 @@ impl Trie {
     pub fn search(&self, word: &[bool]) -> Id {
         let mut current = self.root;
         for &bit in word {
-            current = if bit {
-                self.right(current)
-            } else {
-                self.left(current)
-            };
+            current = if bit { self.right(current) } else { self.left(current) };
             if current == 0 {
                 return 0;
             }
@@ -128,11 +124,7 @@ impl Trie {
     {
         let mut current = self.root;
         for bit in word.into_iter() {
-            current = if bit {
-                self.right(current)
-            } else {
-                self.left(current)
-            };
+            current = if bit { self.right(current) } else { self.left(current) };
             if current == 0 {
                 return 0;
             }
@@ -155,10 +147,7 @@ impl Trie {
     // }
 
     pub fn num_leaves(&self) -> usize {
-        self.nodes
-            .iter()
-            .filter(|node| node.left == 0 && node.right == 0)
-            .count()
+        self.nodes.iter().filter(|node| node.left == 0 && node.right == 0).count()
     }
 }
 
@@ -186,10 +175,7 @@ pub fn build_trie(cubes: &[Vec<bool>]) -> Trie {
 
 impl Trie {
     pub fn iter(&self) -> TrieIter<'_> {
-        TrieIter {
-            trie: self,
-            current: None,
-        }
+        TrieIter { trie: self, current: None }
     }
 }
 
@@ -321,11 +307,7 @@ mod tests {
 
     #[test]
     fn test_build_trie() {
-        let cubes = vec![
-            vec![true, false, true],
-            vec![false, true, false],
-            vec![true, true, true],
-        ];
+        let cubes = vec![vec![true, false, true], vec![false, true, false], vec![true, true, true]];
         let trie = build_trie(&cubes);
         for cube in cubes.iter() {
             // assert!(trie.contains(cube));

@@ -12,10 +12,7 @@ use crate::utils::DisplaySlice;
 // TODO: derive_ternary
 
 pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> {
-    trace!(
-        "derive_clauses(hard = [{}])",
-        hard.iter().map(|c| DisplaySlice(c)).join(", ")
-    );
+    trace!("derive_clauses(hard = [{}])", hard.iter().map(|c| DisplaySlice(c)).join(", "));
 
     // Trivial case:
     if hard.is_empty() {
@@ -32,11 +29,9 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
 
     let pb = ProgressBar::new(n as u64);
     pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed}] [{bar:40.cyan/white}] {pos:>6}/{len} (ETA: {eta}) {msg}",
-        )
-        .unwrap()
-        .progress_chars("#>-"),
+        ProgressStyle::with_template("{spinner:.green} [{elapsed}] [{bar:40.cyan/white}] {pos:>6}/{len} (ETA: {eta}) {msg}")
+            .unwrap()
+            .progress_chars("#>-"),
     );
     pb.set_message("units");
     // count_unit :: {i: (pos,neg)}
@@ -65,31 +60,21 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
         let var = hard[0][i].var();
         if pos == 0 {
             let clause = vec![Lit::new(var, true)];
-            debug!(
-                "variable {} is never positive |= clause {}",
-                var,
-                DisplaySlice(&clause)
-            );
+            debug!("variable {} is never positive |= clause {}", var, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
         if neg == 0 {
             let clause = vec![Lit::new(var, false)];
-            debug!(
-                "variable {} is never negative |= clause {}",
-                var,
-                DisplaySlice(&clause)
-            );
+            debug!("variable {} is never negative |= clause {}", var, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
     }
 
     let pb = ProgressBar::new((n * (n - 1) / 2) as u64);
     pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed}] [{bar:40.cyan/white}] {pos:>6}/{len} (ETA: {eta}) {msg}",
-        )
-        .unwrap()
-        .progress_chars("#>-"),
+        ProgressStyle::with_template("{spinner:.green} [{elapsed}] [{bar:40.cyan/white}] {pos:>6}/{len} (ETA: {eta}) {msg}")
+            .unwrap()
+            .progress_chars("#>-"),
     );
     pb.set_message("binary");
     // count_binary :: {(i,j): (++, +-, -+, --)}
@@ -125,52 +110,29 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
     for (&(i, j), &(pp, pn, np, nn)) in count_binary.iter() {
         let a = hard[0][i].var();
         let b = hard[0][j].var();
-        debug!(
-            "Count (pp/pn/np/nn) for {}-{} is {} / {} / {} / {}",
-            a, b, pp, pn, np, nn
-        );
+        debug!("Count (pp/pn/np/nn) for {}-{} is {} / {} / {} / {}", a, b, pp, pn, np, nn);
     }
     for (&(i, j), &(pp, pn, np, nn)) in count_binary.iter() {
         let a = hard[0][i].var();
         let b = hard[0][j].var();
         if pp == 0 {
             let clause = vec![Lit::new(a, true), Lit::new(b, true)];
-            debug!(
-                "pair {}-{} is never pos-pos |= clause {}",
-                a,
-                b,
-                DisplaySlice(&clause)
-            );
+            debug!("pair {}-{} is never pos-pos |= clause {}", a, b, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
         if pn == 0 {
             let clause = vec![Lit::new(a, true), Lit::new(b, false)];
-            debug!(
-                "pair {}-{} is never pos-neg |= clause {}",
-                a,
-                b,
-                DisplaySlice(&clause)
-            );
+            debug!("pair {}-{} is never pos-neg |= clause {}", a, b, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
         if np == 0 {
             let clause = vec![Lit::new(a, false), Lit::new(b, true)];
-            debug!(
-                "pair {}-{} is never neg-pos |= clause {}",
-                a,
-                b,
-                DisplaySlice(&clause)
-            );
+            debug!("pair {}-{} is never neg-pos |= clause {}", a, b, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
         if nn == 0 {
             let clause = vec![Lit::new(a, false), Lit::new(b, false)];
-            debug!(
-                "pair {}-{} is never neg-neg |= clause {}",
-                a,
-                b,
-                DisplaySlice(&clause)
-            );
+            debug!("pair {}-{} is never neg-neg |= clause {}", a, b, DisplaySlice(&clause));
             derived_clauses.push(clause);
         }
     }
@@ -218,8 +180,7 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
                 }
 
                 // Count triples:
-                let (mut ppp, mut ppn, mut pnp, mut pnn, mut npp, mut npn, mut nnp, mut nnn) =
-                    (0, 0, 0, 0, 0, 0, 0, 0);
+                let (mut ppp, mut ppn, mut pnp, mut pnn, mut npp, mut npn, mut nnp, mut nnn) = (0, 0, 0, 0, 0, 0, 0, 0);
                 for cube in hard.iter() {
                     match (cube[i].negated(), cube[j].negated(), cube[k].negated()) {
                         (false, false, false) => ppp += 1, // pos-pos-pos
@@ -251,90 +212,42 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
             let c = hard[0][k].var();
             if ppp == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, true), Lit::new(c, true)];
-                debug!(
-                    "triple {}-{}-{} is never pos-pos-pos |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never pos-pos-pos |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if ppn == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, true), Lit::new(c, false)];
-                debug!(
-                    "triple {}-{}-{} is never pos-pos-neg |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never pos-pos-neg |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if pnp == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, false), Lit::new(c, true)];
-                debug!(
-                    "triple {}-{}-{} is never pos-neg-pos |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never pos-neg-pos |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if pnn == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, false), Lit::new(c, false)];
-                debug!(
-                    "triple {}-{}-{} is never pos-neg-neg |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never pos-neg-neg |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if npp == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, true), Lit::new(c, true)];
-                debug!(
-                    "triple {}-{}-{} is never neg-pos-pos |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never neg-pos-pos |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if npn == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, true), Lit::new(c, false)];
-                debug!(
-                    "triple {}-{}-{} is never neg-pos-neg |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never neg-pos-neg |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if nnp == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, false), Lit::new(c, true)];
-                debug!(
-                    "triple {}-{}-{} is never neg-neg-pos |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never neg-neg-pos |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
             if nnn == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, false), Lit::new(c, false)];
-                debug!(
-                    "triple {}-{}-{} is never neg-neg-neg |= clause {}",
-                    a,
-                    b,
-                    c,
-                    DisplaySlice(&clause)
-                );
+                debug!("triple {}-{}-{} is never neg-neg-neg |= clause {}", a, b, c, DisplaySlice(&clause));
                 derived_clauses.push(clause);
             }
         }
@@ -345,12 +258,7 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
         clause.sort_by_key(|lit| lit.inner());
     }
     // Sort all clauses:
-    derived_clauses.sort_by_key(|clause| {
-        (
-            clause.len(),
-            clause.iter().map(|lit| lit.inner()).collect_vec(),
-        )
-    });
+    derived_clauses.sort_by_key(|clause| (clause.len(), clause.iter().map(|lit| lit.inner()).collect_vec()));
 
     derived_clauses
 }

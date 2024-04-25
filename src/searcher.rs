@@ -87,10 +87,7 @@ impl BackdoorSearcher {
     ) -> Option<RunResult> {
         let start_time = Instant::now();
 
-        info!(
-            "Running EA for {} iterations with backdoor size {}",
-            num_iter, backdoor_size
-        );
+        info!("Running EA for {} iterations with backdoor size {}", num_iter, backdoor_size);
 
         // Keep only active variables in the pool:
         self.global_pool.retain(|&v| self.solver.is_active(v));
@@ -122,14 +119,10 @@ impl BackdoorSearcher {
                     let neg_lit = Lit::new(var, true);
 
                     let (_pos_res, pos_prop) = match &mut self.solver {
-                        SatSolver::Cadical(solver) => {
-                            solver.propcheck(&[pos_lit.to_external()], false, false, false)
-                        }
+                        SatSolver::Cadical(solver) => solver.propcheck(&[pos_lit.to_external()], false, false, false),
                     };
                     let (_neg_res, neg_prop) = match &mut self.solver {
-                        SatSolver::Cadical(solver) => {
-                            solver.propcheck(&[neg_lit.to_external()], false, false, false)
-                        }
+                        SatSolver::Cadical(solver) => solver.propcheck(&[neg_lit.to_external()], false, false, false),
                     };
                     let h = pos_prop * neg_prop;
                     // info!("Variable {} (literals {} and {}) has heuristic value: {} * {} = {}", var, pos_lit, neg_lit, pos_prop, neg_prop, h);
@@ -196,10 +189,7 @@ impl BackdoorSearcher {
             // Break upon reaching the maximum required rho:
             if let Some(max_rho) = max_rho {
                 if i > min_iter && best_fitness.rho >= max_rho {
-                    debug!(
-                        "Reached maximum required rho {} >= {}",
-                        best_fitness.rho, max_rho
-                    );
+                    debug!("Reached maximum required rho {} >= {}", best_fitness.rho, max_rho);
                     break;
                 }
             }
@@ -228,11 +218,7 @@ impl BackdoorSearcher {
             let mutated_fitness = self.calculate_fitness(&mutated_instance, Some(&best_fitness));
 
             let time_iter = time_iter.elapsed();
-            if i <= 10
-                || (i < 1000 && i % 100 == 0)
-                || (i < 10000 && i % 1000 == 0)
-                || i % 10000 == 0
-            {
+            if i <= 10 || (i < 1000 && i % 100 == 0) || (i < 10000 && i % 1000 == 0) || i % 10000 == 0 {
                 debug!(
                     "[{} / {}] rho={:.3}, hard={}, size={}, time={:.3} ms",
                     i,
@@ -279,8 +265,7 @@ impl BackdoorSearcher {
 
         // Ban used variables:
         if self.options.ban_used_variables {
-            self.banned_vars
-                .extend(best_instance.variables.iter().cloned());
+            self.banned_vars.extend(best_instance.variables.iter().cloned());
         }
 
         // Clear the cache:
@@ -323,11 +308,7 @@ impl BackdoorSearcher {
             // Calculate the fitness value:
             let value = 1.0 - rho;
 
-            let fit = Fitness {
-                value,
-                rho,
-                num_hard,
-            };
+            let fit = Fitness { value, rho, num_hard };
 
             self.cache.insert(key, fit.clone());
             fit
@@ -352,11 +333,7 @@ impl BackdoorSearcher {
             // to_replace.len() ~ Bin(1/n)
             assert!(to_replace.len() <= n);
 
-            let other_vars: Vec<Var> = pool
-                .iter()
-                .filter(|v| !instance.variables.contains(v))
-                .copied()
-                .collect();
+            let other_vars: Vec<Var> = pool.iter().filter(|v| !instance.variables.contains(v)).copied().collect();
             assert!(other_vars.len() >= to_replace.len());
             let substituted = other_vars.choose_multiple(&mut self.rng, to_replace.len());
             for (i, &v) in zip_eq(to_replace, substituted) {

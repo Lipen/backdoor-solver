@@ -15,10 +15,7 @@ use backdoor::lit::Lit;
 use backdoor::trie::Trie;
 use backdoor::utils::parse_multiple_comma_separated_intervals;
 use backdoor::utils::parse_multiple_comma_separated_intervals_from;
-use backdoor::utils::{
-    clause_to_external, concat_cubes, create_line_writer, parse_dimacs, partition_tasks_cadical,
-    DisplaySlice,
-};
+use backdoor::utils::{clause_to_external, concat_cubes, create_line_writer, parse_dimacs, partition_tasks_cadical, DisplaySlice};
 use backdoor::var::Var;
 
 use cadical::statik::Cadical;
@@ -69,11 +66,8 @@ struct Cli {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    env_logger::Builder::from_env(
-        env_logger::Env::default()
-            .default_filter_or("debug,simple_sat::solver=info,backdoor::derivation=info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug,simple_sat::solver=info,backdoor::derivation=info"))
+        .init();
 
     let start_time = Instant::now();
     let args = Cli::parse();
@@ -87,11 +81,7 @@ fn main() -> color_eyre::Result<()> {
     };
     let backdoors: Vec<Vec<Var>> = backdoors
         .into_iter()
-        .map(|bd| {
-            bd.into_iter()
-                .map(|i| Var::from_external(i as u32))
-                .collect()
-        })
+        .map(|bd| bd.into_iter().map(|i| Var::from_external(i as u32)).collect())
         .collect();
     info!("Total backdoors: {}", backdoors.len());
     for backdoor in backdoors.iter() {
@@ -223,12 +213,7 @@ fn main() -> color_eyre::Result<()> {
             cubes_product.len() * hard.len()
         );
         if let Some(f) = &mut file_results {
-            writeln!(
-                f,
-                "{},product,{}",
-                run_number,
-                cubes_product.len() * hard.len()
-            )?;
+            writeln!(f, "{},product,{}", run_number, cubes_product.len() * hard.len())?;
         }
 
         if cubes_product.len() * hard.len() > args.max_product_size {
@@ -246,16 +231,9 @@ fn main() -> color_eyre::Result<()> {
             s.extend(hard[0].iter().map(|lit| lit.var()));
             s.into_iter().sorted().collect_vec()
         };
-        debug!(
-            "Total {} variables: {}",
-            variables.len(),
-            DisplaySlice(&variables)
-        );
+        debug!("Total {} variables: {}", variables.len(), DisplaySlice(&variables));
 
-        info!(
-            "Constructing trie out of {} cubes...",
-            cubes_product.len() * hard.len()
-        );
+        info!("Constructing trie out of {} cubes...", cubes_product.len() * hard.len());
         let time_trie_construct = Instant::now();
         let mut trie = Trie::new();
         let pb = ProgressBar::new((cubes_product.len() * hard.len()) as u64);
@@ -292,11 +270,7 @@ fn main() -> color_eyre::Result<()> {
 
         cubes_product = trie
             .iter()
-            .map(|cube| {
-                zip_eq(cube, &variables)
-                    .map(|(b, &v)| Lit::new(v, b))
-                    .collect()
-            })
+            .map(|cube| zip_eq(cube, &variables).map(|(b, &v)| Lit::new(v, b)).collect())
             .collect();
         drop(trie);
 
@@ -340,9 +314,7 @@ fn main() -> color_eyre::Result<()> {
                 SolveResponse::Interrupted => true,
                 SolveResponse::Unsat => false,
                 SolveResponse::Sat => {
-                    let model = (1..=solver.vars())
-                        .map(|i| solver.val(i as i32).unwrap())
-                        .collect::<Vec<_>>();
+                    let model = (1..=solver.vars()).map(|i| solver.val(i as i32).unwrap()).collect::<Vec<_>>();
                     {
                         let f = File::create("model.txt").unwrap();
                         let mut f = BufWriter::new(f);
@@ -446,12 +418,7 @@ fn main() -> color_eyre::Result<()> {
         // debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
         let time_run = time_run.elapsed();
-        info!(
-            "Done run {} / {} in {:.1}s",
-            run_number,
-            backdoors.len(),
-            time_run.as_secs_f64()
-        );
+        info!("Done run {} / {} in {:.1}s", run_number, backdoors.len(), time_run.as_secs_f64());
         info!(
             "So far derived {} new clauses ({} units, {} binary, {} other)",
             all_derived_clauses.len(),

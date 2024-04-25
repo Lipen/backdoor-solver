@@ -17,8 +17,8 @@ use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::{
-    clause_from_external, concat_cubes, create_line_writer, determine_vars_pool, get_hard_tasks,
-    parse_dimacs, propcheck_all_trie_via_internal, write_clause, DisplaySlice,
+    clause_from_external, concat_cubes, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs,
+    propcheck_all_trie_via_internal, write_clause, DisplaySlice,
 };
 use backdoor::var::Var;
 
@@ -160,19 +160,14 @@ struct Cli {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("debug,backdoor::derivation=info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug,backdoor::derivation=info")).init();
 
     let start_time = Instant::now();
     let args = Cli::parse();
     info!("args = {:?}", args);
 
     if args.add_cores && !args.compute_cores {
-        bail!(
-            "Cannot add cores (`--add-cores` flag) without computing them (`--compute-cores` flag)"
-        );
+        bail!("Cannot add cores (`--add-cores` flag) without computing them (`--compute-cores` flag)");
     }
 
     // Initialize Cadical:
@@ -222,10 +217,7 @@ fn main() -> color_eyre::Result<()> {
     debug!("solver.redundant() = {}", solver.redundant());
     debug!("solver.irredundant() = {}", solver.irredundant());
     debug!("solver.clauses() = {}", solver.clauses_iter().count());
-    debug!(
-        "solver.all_clauses() = {}",
-        solver.all_clauses_iter().count()
-    );
+    debug!("solver.all_clauses() = {}", solver.all_clauses_iter().count());
 
     // Create the pool of variables available for EA:
     let pool: Vec<Var> = determine_vars_pool(&args.path_cnf, &args.allowed_vars, &args.banned_vars);
@@ -273,10 +265,7 @@ fn main() -> color_eyre::Result<()> {
     let mut _unsat = false;
 
     if args.budget_presolve > 0 {
-        info!(
-            "Pre-solving with {} conflicts budget...",
-            args.budget_presolve
-        );
+        info!("Pre-solving with {} conflicts budget...", args.budget_presolve);
         match &searcher.solver {
             SatSolver::Cadical(solver) => {
                 solver.limit("conflicts", args.budget_presolve as i32);
@@ -330,11 +319,7 @@ fn main() -> color_eyre::Result<()> {
         // Remove non-active variables from all cubes:
         cubes_product = cubes_product
             .into_iter()
-            .map(|cube| {
-                cube.into_iter()
-                    .filter(|&lit| searcher.solver.is_active(lit.var()))
-                    .collect()
-            })
+            .map(|cube| cube.into_iter().filter(|&lit| searcher.solver.is_active(lit.var())).collect())
             .collect();
 
         // Reset banned used variables:
@@ -353,11 +338,7 @@ fn main() -> color_eyre::Result<()> {
         ) {
             let backdoor = result.best_instance.get_variables();
             let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
-            debug!(
-                "Backdoor {} has {} hard tasks",
-                DisplaySlice(&backdoor),
-                hard.len()
-            );
+            debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard.len());
             assert_eq!(hard.len() as u64, result.best_fitness.num_hard);
 
             if hard.len() == 0 {
@@ -416,11 +397,7 @@ fn main() -> color_eyre::Result<()> {
                     }
                     let time_extract = time_extract.elapsed();
                     total_time_extract += time_extract;
-                    debug!(
-                        "Extracted {} new clauses in {:.1}s",
-                        num_new,
-                        time_extract.as_secs_f64()
-                    );
+                    debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
                     debug!(
                         "So far total {} clauses, total spent {:.3}s for extraction",
                         all_clauses.len(),
@@ -444,12 +421,7 @@ fn main() -> color_eyre::Result<()> {
                         // let orig_hard_len = hard.len();
                         let mut hard = Vec::new();
                         let mut easy = Vec::new();
-                        let res = solver.propcheck_all_tree_via_internal(
-                            &vars_external,
-                            0,
-                            Some(&mut hard),
-                            Some(&mut easy),
-                        );
+                        let res = solver.propcheck_all_tree_via_internal(&vars_external, 0, Some(&mut hard), Some(&mut easy));
                         assert_eq!(hard.len(), res as usize);
                         // assert_eq!(hard.len(), orig_hard_len);
                         let easy: Vec<Vec<Lit>> = easy
@@ -460,12 +432,7 @@ fn main() -> color_eyre::Result<()> {
 
                         let mut easy_cores: HashSet<Vec<Lit>> = HashSet::new();
                         for (i, cube) in easy.iter().enumerate() {
-                            let (res, _) = solver.propcheck(
-                                &cube.iter().map(|lit| lit.to_external()).collect_vec(),
-                                false,
-                                false,
-                                true,
-                            );
+                            let (res, _) = solver.propcheck(&cube.iter().map(|lit| lit.to_external()).collect_vec(), false, false, true);
                             assert!(!res, "Unexpected SAT on cube = {}", DisplaySlice(&cube));
                             let core = solver
                                 .propcheck_get_core()
@@ -491,10 +458,7 @@ fn main() -> color_eyre::Result<()> {
                             easy_cores.insert(core);
                         }
                         debug!("Unique cores from easy tasks: {}", easy_cores.len());
-                        debug!(
-                            "[{}]",
-                            easy_cores.iter().map(|c| DisplaySlice(c)).join(", ")
-                        );
+                        debug!("[{}]", easy_cores.iter().map(|c| DisplaySlice(c)).join(", "));
 
                         if args.add_cores {
                             debug!("Adding {} cores...", easy_cores.len());
@@ -634,15 +598,9 @@ fn main() -> color_eyre::Result<()> {
                     new_clauses.iter().filter(|c| c.len() == 3).count(),
                     new_clauses.iter().filter(|c| c.len() > 2).count()
                 );
-                debug!(
-                    "[{}]",
-                    new_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
-                );
+                debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
-                debug!(
-                    "Adding {} new derived clauses to the solver...",
-                    new_clauses.len()
-                );
+                debug!("Adding {} new derived clauses to the solver...", new_clauses.len());
                 for lemma in new_clauses {
                     searcher.solver.add_clause(&lemma);
                 }
@@ -651,20 +609,12 @@ fn main() -> color_eyre::Result<()> {
             // Remove non-active variables from all cubes:
             cubes_product = cubes_product
                 .into_iter()
-                .map(|cube| {
-                    cube.into_iter()
-                        .filter(|&lit| searcher.solver.is_active(lit.var()))
-                        .collect()
-                })
+                .map(|cube| cube.into_iter().filter(|&lit| searcher.solver.is_active(lit.var())).collect())
                 .collect();
 
             let hard: Vec<Vec<Lit>> = hard
                 .into_iter()
-                .map(|cube| {
-                    cube.into_iter()
-                        .filter(|lit| searcher.solver.is_active(lit.var()))
-                        .collect()
-                })
+                .map(|cube| cube.into_iter().filter(|lit| searcher.solver.is_active(lit.var())).collect())
                 .collect();
 
             // ------------------------------------------------------------------------
@@ -676,36 +626,20 @@ fn main() -> color_eyre::Result<()> {
                 cubes_product.len() * hard.len()
             );
             if let Some(f) = &mut file_results {
-                writeln!(
-                    f,
-                    "{},product,{}",
-                    run_number,
-                    cubes_product.len() * hard.len()
-                )?;
+                writeln!(f, "{},product,{}", run_number, cubes_product.len() * hard.len())?;
             }
             let variables = {
                 let mut s = HashSet::new();
                 s.extend(cubes_product[0].iter().map(|lit| lit.var()));
-                s.extend(
-                    backdoor
-                        .iter()
-                        .filter(|&&var| searcher.solver.is_active(var)),
-                );
+                s.extend(backdoor.iter().filter(|&&var| searcher.solver.is_active(var)));
                 s.into_iter().sorted().collect_vec()
             };
-            debug!(
-                "Total {} variables: {}",
-                variables.len(),
-                DisplaySlice(&variables)
-            );
+            debug!("Total {} variables: {}", variables.len(), DisplaySlice(&variables));
             for &var in variables.iter() {
                 assert!(searcher.solver.is_active(var), "var {} is not active", var);
             }
 
-            info!(
-                "Constructing trie out of {} potential cubes...",
-                cubes_product.len() * hard.len()
-            );
+            info!("Constructing trie out of {} potential cubes...", cubes_product.len() * hard.len());
             let time_trie_construct = Instant::now();
             let mut trie = Trie::new();
             let pb = ProgressBar::new((cubes_product.len() * hard.len()) as u64);
@@ -751,11 +685,7 @@ fn main() -> color_eyre::Result<()> {
                         &trie,
                         0,
                         Some(&mut valid),
-                        if args.compute_cores {
-                            Some(&mut invalid)
-                        } else {
-                            None
-                        },
+                        if args.compute_cores { Some(&mut invalid) } else { None },
                     );
                 }
             }
@@ -776,12 +706,7 @@ fn main() -> color_eyre::Result<()> {
                         debug!("Invalid sub-cubes: {}", invalid.len());
                         let mut invalid_cores: HashSet<Vec<Lit>> = HashSet::new();
                         for (i, cube) in invalid.iter().enumerate() {
-                            let (res, _) = solver.propcheck(
-                                &cube.iter().map(|lit| lit.to_external()).collect_vec(),
-                                false,
-                                false,
-                                true,
-                            );
+                            let (res, _) = solver.propcheck(&cube.iter().map(|lit| lit.to_external()).collect_vec(), false, false, true);
                             assert!(!res, "Unexpected SAT on cube = {}", DisplaySlice(&cube));
                             let core = solver
                                 .propcheck_get_core()
@@ -807,10 +732,7 @@ fn main() -> color_eyre::Result<()> {
                             invalid_cores.insert(core);
                         }
                         debug!("Unique cores from invalid cubes: {}", invalid_cores.len());
-                        debug!(
-                            "[{}]",
-                            invalid_cores.iter().map(|c| DisplaySlice(c)).join(", ")
-                        );
+                        debug!("[{}]", invalid_cores.iter().map(|c| DisplaySlice(c)).join(", "));
 
                         if args.add_cores {
                             debug!("Adding {} cores...", invalid_cores.len());
@@ -935,15 +857,9 @@ fn main() -> color_eyre::Result<()> {
                     new_clauses.iter().filter(|c| c.len() == 3).count(),
                     new_clauses.iter().filter(|c| c.len() > 2).count()
                 );
-                debug!(
-                    "[{}]",
-                    new_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
-                );
+                debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
-                debug!(
-                    "Adding {} new derived clauses to the solver...",
-                    new_clauses.len()
-                );
+                debug!("Adding {} new derived clauses to the solver...", new_clauses.len());
                 for lemma in new_clauses {
                     searcher.solver.add_clause(&lemma);
                 }
@@ -972,17 +888,10 @@ fn main() -> color_eyre::Result<()> {
         // Remove non-active variables from all cubes:
         cubes_product = cubes_product
             .into_iter()
-            .map(|cube| {
-                cube.into_iter()
-                    .filter(|&lit| searcher.solver.is_active(lit.var()))
-                    .collect()
-            })
+            .map(|cube| cube.into_iter().filter(|&lit| searcher.solver.is_active(lit.var())).collect())
             .collect();
 
-        info!(
-            "Filtering {} hard cubes via limited solver...",
-            cubes_product.len()
-        );
+        info!("Filtering {} hard cubes via limited solver...", cubes_product.len());
         let time_filter = Instant::now();
         let num_cubes_before_filtering = cubes_product.len();
         let num_conflicts = match &mut searcher.solver {
@@ -1027,10 +936,7 @@ fn main() -> color_eyre::Result<()> {
 
             debug!("Computing cube score...");
             let time_cube_scores = Instant::now();
-            let mut cube_score: Vec<f64> = cubes_product
-                .iter()
-                .map(|cube| compute_cube_score(cube, &neighbors))
-                .collect();
+            let mut cube_score: Vec<f64> = cubes_product.iter().map(|cube| compute_cube_score(cube, &neighbors)).collect();
             let time_cube_scores = time_cube_scores.elapsed();
             debug!(
                 "Computed cube scores (size={}) in {:.1}s",
@@ -1058,9 +964,7 @@ fn main() -> color_eyre::Result<()> {
                     let time_asserting = Instant::now();
                     for &i in remaining_cubes.iter() {
                         assert!(
-                            (compute_cube_score(&cubes_product[i], &neighbors) - cube_score[i])
-                                .abs()
-                                <= 1e-6,
+                            (compute_cube_score(&cubes_product[i], &neighbors) - cube_score[i]).abs() <= 1e-6,
                             "compute = {}, score = {}",
                             compute_cube_score(&cubes_product[i], &neighbors),
                             cube_score[i]
@@ -1105,9 +1009,7 @@ fn main() -> color_eyre::Result<()> {
                                         );
                                     }
                                     let time_rescore = Instant::now();
-                                    for (&a, &b) in
-                                        cubes_product[best_cube].iter().tuple_combinations()
-                                    {
+                                    for (&a, &b) in cubes_product[best_cube].iter().tuple_combinations() {
                                         let d = neighbors[&(a, b)].len();
                                         if d == 0 {
                                             continue;
@@ -1124,10 +1026,7 @@ fn main() -> color_eyre::Result<()> {
                                                 }
                                             }
                                         }
-                                        neighbors
-                                            .get_mut(&(a, b))
-                                            .unwrap()
-                                            .retain(|&i| i != best_cube);
+                                        neighbors.get_mut(&(a, b)).unwrap().retain(|&i| i != best_cube);
                                     }
                                     let time_rescore = time_rescore.elapsed();
                                     if verb || time_rescore.as_secs_f64() > 0.1 {
@@ -1155,9 +1054,7 @@ fn main() -> color_eyre::Result<()> {
                                         );
                                     }
                                     let time_rescore = Instant::now();
-                                    for (&a, &b) in
-                                        cubes_product[best_cube].iter().tuple_combinations()
-                                    {
+                                    for (&a, &b) in cubes_product[best_cube].iter().tuple_combinations() {
                                         let ns = neighbors.get_mut(&(a, b)).unwrap();
                                         let d = ns.len();
                                         for i in ns.drain(..) {
@@ -1220,11 +1117,7 @@ fn main() -> color_eyre::Result<()> {
                     }
                     let time_extract = time_extract.elapsed();
                     total_time_extract += time_extract;
-                    debug!(
-                        "Extracted {} new clauses in {:.1}s",
-                        num_new,
-                        time_extract.as_secs_f64()
-                    );
+                    debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
                     debug!(
                         "So far total {} clauses, total spent {:.3}s for extraction",
                         all_clauses.len(),
@@ -1369,11 +1262,7 @@ fn main() -> color_eyre::Result<()> {
                     }
                     let time_extract = time_extract.elapsed();
                     total_time_extract += time_extract;
-                    debug!(
-                        "Extracted {} new clauses in {:.1}s",
-                        num_new,
-                        time_extract.as_secs_f64()
-                    );
+                    debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
                     debug!(
                         "So far total {} clauses, total spent {:.3}s for extraction",
                         all_clauses.len(),
@@ -1515,15 +1404,9 @@ fn main() -> color_eyre::Result<()> {
                 new_clauses.iter().filter(|c| c.len() == 3).count(),
                 new_clauses.iter().filter(|c| c.len() > 2).count()
             );
-            debug!(
-                "[{}]",
-                new_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
-            );
+            debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
-            debug!(
-                "Adding {} new derived clauses to the solver...",
-                new_clauses.len()
-            );
+            debug!("Adding {} new derived clauses to the solver...", new_clauses.len());
             for lemma in new_clauses {
                 searcher.solver.add_clause(&lemma);
             }
@@ -1603,11 +1486,7 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let time_runs = time_runs.elapsed();
-    info!(
-        "Finished {} runs in {:.1}s",
-        run_number,
-        time_runs.as_secs_f64()
-    );
+    info!("Finished {} runs in {:.1}s", run_number, time_runs.as_secs_f64());
     info!(
         "Total derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
         all_derived_clauses.len(),
@@ -1617,10 +1496,7 @@ fn main() -> color_eyre::Result<()> {
         all_derived_clauses.iter().filter(|c| c.len() > 2).count()
     );
 
-    debug!(
-        "Time spent on extracting all clauses: {:.3}s",
-        total_time_extract.as_secs_f64()
-    );
+    debug!("Time spent on extracting all clauses: {:.3}s", total_time_extract.as_secs_f64());
 
     match &searcher.solver {
         SatSolver::Cadical(solver) => {

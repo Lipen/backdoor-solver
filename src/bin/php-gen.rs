@@ -69,21 +69,12 @@ fn main() -> color_eyre::Result<()> {
 
         writeln!(f, "p cnf {} {}", num_vars, clauses.len())?;
         for clause in clauses {
-            writeln!(
-                f,
-                "{} 0",
-                clause.iter().map(|lit| format!("{}", lit)).join(" ")
-            )?;
+            writeln!(f, "{} 0", clause.iter().map(|lit| format!("{}", lit)).join(" "))?;
         }
     };
 
     let time_encoding = time_encoding.elapsed();
-    info!(
-        "Done encoding PHP({}, {}) in {:.1}s",
-        n + 1,
-        n,
-        time_encoding.as_secs_f64()
-    );
+    info!("Done encoding PHP({}, {}) in {:.1}s", n + 1, n, time_encoding.as_secs_f64());
 
     Ok(())
 }

@@ -64,40 +64,16 @@ fn test_simple_unsat() -> color_eyre::Result<()> {
 
     println!("active: {}", solver.active());
     println!("irredundant: {}", solver.irredundant());
-    println!(
-        "fixed 1: {:?}, fixed -1: {:?}",
-        solver.fixed(1)?,
-        solver.fixed(-1)?
-    );
-    println!(
-        "fixed 2: {:?}, fixed -2: {:?}",
-        solver.fixed(2)?,
-        solver.fixed(-2)?
-    );
-    println!(
-        "fixed 3: {:?}, fixed -3: {:?}",
-        solver.fixed(3)?,
-        solver.fixed(-3)?
-    );
+    println!("fixed 1: {:?}, fixed -1: {:?}", solver.fixed(1)?, solver.fixed(-1)?);
+    println!("fixed 2: {:?}, fixed -2: {:?}", solver.fixed(2)?, solver.fixed(-2)?);
+    println!("fixed 3: {:?}, fixed -3: {:?}", solver.fixed(3)?, solver.fixed(-3)?);
 
-    println!(
-        "frozen 1: {}, frozen 2: {}",
-        solver.frozen(1)?,
-        solver.frozen(2)?
-    );
+    println!("frozen 1: {}, frozen 2: {}", solver.frozen(1)?, solver.frozen(2)?);
     solver.freeze(2)?;
-    println!(
-        "frozen 1: {}, frozen 2: {}",
-        solver.frozen(1)?,
-        solver.frozen(2)?
-    );
+    println!("frozen 1: {}, frozen 2: {}", solver.frozen(1)?, solver.frozen(2)?);
     assert!(solver.frozen(2)?);
     solver.melt(2)?;
-    println!(
-        "frozen 1: {:?}, frozen 2: {:?}",
-        solver.frozen(1)?,
-        solver.frozen(2)?
-    );
+    println!("frozen 1: {:?}, frozen 2: {:?}", solver.frozen(1)?, solver.frozen(2)?);
     assert!(!solver.frozen(2)?);
 
     let res = solver.simplify()?;

@@ -12,8 +12,7 @@ use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::utils::{
-    clause_to_external, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs,
-    write_clause, DisplaySlice,
+    clause_to_external, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs, write_clause, DisplaySlice,
 };
 use backdoor::var::Var;
 
@@ -125,9 +124,7 @@ fn print_stats(solver: &Cadical, prefix: &str) {
     debug!(
         "{}active: {}",
         prefix,
-        (1..=solver.vars() as i32)
-            .filter(|&v| solver.is_active(v))
-            .count()
+        (1..=solver.vars() as i32).filter(|&v| solver.is_active(v)).count()
     );
     debug!(
         "{}fixed: {}",
@@ -140,31 +137,11 @@ fn print_stats(solver: &Cadical, prefix: &str) {
             .count()
     );
     debug!("{}clauses: {}", prefix, solver.clauses_iter().count());
-    debug!(
-        "{}units: {}",
-        prefix,
-        solver.clauses_iter().filter(|c| c.len() == 1).count()
-    );
-    debug!(
-        "{}binary: {}",
-        prefix,
-        solver.clauses_iter().filter(|c| c.len() == 2).count()
-    );
-    debug!(
-        "{}ternary: {}",
-        prefix,
-        solver.clauses_iter().filter(|c| c.len() == 3).count()
-    );
-    debug!(
-        "{}large: {}",
-        prefix,
-        solver.clauses_iter().filter(|c| c.len() > 3).count()
-    );
-    debug!(
-        "{}all_clauses: {}",
-        prefix,
-        solver.all_clauses_iter().count()
-    );
+    debug!("{}units: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 1).count());
+    debug!("{}binary: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 2).count());
+    debug!("{}ternary: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 3).count());
+    debug!("{}large: {}", prefix, solver.clauses_iter().filter(|c| c.len() > 3).count());
+    debug!("{}all_clauses: {}", prefix, solver.all_clauses_iter().count());
     debug!(
         "{}all_units: {}",
         prefix,
@@ -180,11 +157,7 @@ fn print_stats(solver: &Cadical, prefix: &str) {
         prefix,
         solver.all_clauses_iter().filter(|c| c.len() == 3).count()
     );
-    debug!(
-        "{}all_large: {}",
-        prefix,
-        solver.all_clauses_iter().filter(|c| c.len() > 3).count()
-    );
+    debug!("{}all_large: {}", prefix, solver.all_clauses_iter().filter(|c| c.len() > 3).count());
     debug!("{}conflicts: {}", prefix, solver.conflicts());
     debug!("{}decisions: {}", prefix, solver.decisions());
     debug!("{}restarts: {}", prefix, solver.restarts());
@@ -193,11 +166,8 @@ fn print_stats(solver: &Cadical, prefix: &str) {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    env_logger::Builder::from_env(
-        env_logger::Env::default()
-            .default_filter_or("debug,simple_sat::solver=info,backdoor::derivation=info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug,simple_sat::solver=info,backdoor::derivation=info"))
+        .init();
 
     let start_time = Instant::now();
     let args = Cli::parse();
@@ -244,15 +214,7 @@ fn main() -> color_eyre::Result<()> {
     // Create and open the file with records:
     let mut file_records = if let Some(path) = &args.path_records {
         let mut writer = csv::Writer::from_path(path)?;
-        writer.write_record([
-            "run",
-            "iteration",
-            "instance",
-            "fitness",
-            "num_hard",
-            "rho",
-            "time",
-        ])?;
+        writer.write_record(["run", "iteration", "instance", "fitness", "num_hard", "rho", "time"])?;
         Some(writer)
     } else {
         None
@@ -279,10 +241,7 @@ fn main() -> color_eyre::Result<()> {
     let mut _unsat = false;
 
     if args.budget_presolve > 0 {
-        info!(
-            "Pre-solving with {} conflicts budget...",
-            args.budget_presolve
-        );
+        info!("Pre-solving with {} conflicts budget...", args.budget_presolve);
         match &searcher.solver {
             SatSolver::Cadical(solver) => {
                 solver.limit("conflicts", args.budget_presolve as i32);
@@ -323,9 +282,7 @@ fn main() -> color_eyre::Result<()> {
             }
             let pos_lit = Lit::new(var, false);
             let (res, _) = match &searcher.solver {
-                SatSolver::Cadical(solver) => {
-                    solver.propcheck(&[pos_lit.to_external()], false, false, false)
-                }
+                SatSolver::Cadical(solver) => solver.propcheck(&[pos_lit.to_external()], false, false, false),
             };
             if !res {
                 info!("failed literal {}", pos_lit);
@@ -334,9 +291,7 @@ fn main() -> color_eyre::Result<()> {
             } else {
                 let neg_lit = Lit::new(var, true);
                 let (res, _) = match &searcher.solver {
-                    SatSolver::Cadical(solver) => {
-                        solver.propcheck(&[neg_lit.to_external()], false, false, false)
-                    }
+                    SatSolver::Cadical(solver) => solver.propcheck(&[neg_lit.to_external()], false, false, false),
                 };
                 if !res {
                     info!("failed literal {}", neg_lit);
@@ -349,11 +304,7 @@ fn main() -> color_eyre::Result<()> {
             }
         }
         let time_failed = time_failed.elapsed();
-        debug!(
-            "Found {} failed literals in {:.3}s",
-            failed.len(),
-            time_failed.as_secs_f64()
-        );
+        debug!("Found {} failed literals in {:.3}s", failed.len(), time_failed.as_secs_f64());
         for &lit in failed.iter() {
             if !searcher.solver.is_active(lit.var()) {
                 debug!("failed literal {} is not active anymore", lit);
@@ -403,12 +354,7 @@ fn main() -> color_eyre::Result<()> {
                 f.serialize((
                     run_number,
                     record.iteration,
-                    record
-                        .instance
-                        .get_variables()
-                        .iter()
-                        .map(|v| v.to_external())
-                        .join(","),
+                    record.instance.get_variables().iter().map(|v| v.to_external()).join(","),
                     record.fitness.value,
                     record.fitness.num_hard,
                     record.fitness.rho,
@@ -424,11 +370,7 @@ fn main() -> color_eyre::Result<()> {
 
         let backdoor = result.best_instance.get_variables();
         let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
-        debug!(
-            "Backdoor {} has {} hard tasks",
-            DisplaySlice(&backdoor),
-            hard.len()
-        );
+        debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard.len());
         assert_eq!(hard.len() as u64, result.best_fitness.num_hard);
 
         // Probe the backdoor variables:
@@ -440,15 +382,13 @@ fn main() -> color_eyre::Result<()> {
                 SatSolver::Cadical(solver) => {
                     for &var in backdoor.iter() {
                         let pos_lit = Lit::new(var, false);
-                        let (res, _) =
-                            solver.propcheck(&[pos_lit.to_external()], false, false, false);
+                        let (res, _) = solver.propcheck(&[pos_lit.to_external()], false, false, false);
                         if !res {
                             info!("failed literal {}", pos_lit);
                             failed.push(pos_lit);
                         } else {
                             let neg_lit = Lit::new(var, true);
-                            let (res, _) =
-                                solver.propcheck(&[neg_lit.to_external()], false, false, false);
+                            let (res, _) = solver.propcheck(&[neg_lit.to_external()], false, false, false);
                             if !res {
                                 info!("failed literal {}", neg_lit);
                                 failed.push(neg_lit);
@@ -475,10 +415,7 @@ fn main() -> color_eyre::Result<()> {
                 SatSolver::Cadical(solver) => {
                     for (&a, &b) in backdoor
                         .iter()
-                        .filter(|&&var| {
-                            !(failed.contains(&Lit::new(var, false))
-                                || failed.contains(&Lit::new(var, true)))
-                        })
+                        .filter(|&&var| !(failed.contains(&Lit::new(var, false)) || failed.contains(&Lit::new(var, true))))
                         .tuple_combinations()
                     {
                         for a in [Lit::new(a, false), Lit::new(a, true)].iter() {
@@ -487,11 +424,7 @@ fn main() -> color_eyre::Result<()> {
                                 let (res, _) = solver.propcheck(&cube, false, false, true);
                                 if !res {
                                     let core = solver.propcheck_get_core();
-                                    info!(
-                                        "failed cube {} with core = {}",
-                                        DisplaySlice(&cube),
-                                        DisplaySlice(&core)
-                                    );
+                                    info!("failed cube {} with core = {}", DisplaySlice(&cube), DisplaySlice(&core));
                                     failed_pairs.push(cube);
                                 }
                             }
@@ -510,21 +443,13 @@ fn main() -> color_eyre::Result<()> {
         if args.check {
             match &searcher.solver {
                 SatSolver::Cadical(solver) => {
-                    let vars_external: Vec<i32> = backdoor
-                        .iter()
-                        .map(|var| var.to_external() as i32)
-                        .collect();
+                    let vars_external: Vec<i32> = backdoor.iter().map(|var| var.to_external() as i32).collect();
                     for &v in vars_external.iter() {
                         assert!(solver.is_active(v), "var {} is not active", v);
                     }
                     let mut hard = Vec::new();
                     let mut easy = Vec::new();
-                    let res = solver.propcheck_all_tree_via_internal(
-                        &vars_external,
-                        0,
-                        Some(&mut hard),
-                        Some(&mut easy),
-                    );
+                    let res = solver.propcheck_all_tree_via_internal(&vars_external, 0, Some(&mut hard), Some(&mut easy));
                     assert_eq!(hard.len(), res as usize);
                     let easy: Vec<Vec<Lit>> = easy
                         .into_iter()
@@ -534,20 +459,11 @@ fn main() -> color_eyre::Result<()> {
 
                     let mut easy_cores: Vec<Vec<Lit>> = Vec::new();
                     for (i, cube) in easy.iter().enumerate() {
-                        let (res, _) = solver.propcheck(
-                            &cube.iter().map(|lit| lit.to_external()).collect_vec(),
-                            false,
-                            false,
-                            true,
-                        );
+                        let (res, _) = solver.propcheck(&cube.iter().map(|lit| lit.to_external()).collect_vec(), false, false, true);
                         if res {
                             panic!("Unexpected SAT on cube = {}", DisplaySlice(&cube));
                         } else {
-                            let mut core = solver
-                                .propcheck_get_core()
-                                .into_iter()
-                                .map(|i| Lit::from_external(i))
-                                .collect_vec();
+                            let mut core = solver.propcheck_get_core().into_iter().map(|i| Lit::from_external(i)).collect_vec();
                             assert!(!core.is_empty());
                             core.sort_by_key(|lit| lit.inner());
                             debug!(
@@ -628,10 +544,7 @@ fn main() -> color_eyre::Result<()> {
                         derived_clauses.iter().filter(|c| c.len() > 2).count(),
                         time_derive.as_secs_f64()
                     );
-                    debug!(
-                        "[{}]",
-                        derived_clauses.iter().map(|c| DisplaySlice(c)).join(", ")
-                    );
+                    debug!("[{}]", derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
                     info!("Checking (probing) derived clauses...");
                     for clause in derived_clauses.iter() {
@@ -692,12 +605,7 @@ fn main() -> color_eyre::Result<()> {
             // debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
 
             let time_run = time_run.elapsed();
-            info!(
-                "Done run {} / {} in {:.1}s",
-                run_number,
-                args.num_runs,
-                time_run.as_secs_f64()
-            );
+            info!("Done run {} / {} in {:.1}s", run_number, args.num_runs, time_run.as_secs_f64());
             info!(
                 "So far derived {} new clauses ({} units, {} binary, {} other)",
                 all_derived_clauses.len(),

@@ -131,10 +131,7 @@ impl Cadical {
     /// Options can only be set right after initialization.
     pub fn set_option(&self, name: &'static str, val: i32) {
         let c_string = CString::new(name).expect("CString::new failed");
-        let ok = unsafe {
-            self.ffi
-                .ccadical_set_option(self.ptr, c_string.as_ptr(), val)
-        };
+        let ok = unsafe { self.ffi.ccadical_set_option(self.ptr, c_string.as_ptr(), val) };
         assert!(ok, "ccadical_set_option returned false");
     }
 
@@ -215,11 +212,7 @@ impl Cadical {
         match unsafe { self.ffi.ccadical_val(self.ptr, lit) } {
             p if p == lit => Ok(LitValue::True),
             n if n == -lit => Ok(LitValue::False),
-            invalid => InvalidResponseValSnafu {
-                lit,
-                value: invalid,
-            }
-            .fail(),
+            invalid => InvalidResponseValSnafu { lit, value: invalid }.fail(),
         }
     }
 
@@ -280,11 +273,7 @@ impl Cadical {
             1 => Ok(FixedResponse::Positive),
             -1 => Ok(FixedResponse::Negative),
             0 => Ok(FixedResponse::Unclear),
-            invalid => InvalidResponseFixedSnafu {
-                lit,
-                value: invalid,
-            }
-            .fail(),
+            invalid => InvalidResponseFixedSnafu { lit, value: invalid }.fail(),
         }
     }
 
