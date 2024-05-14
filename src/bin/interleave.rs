@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::fs::File;
+use std::io::{LineWriter, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -38,8 +39,8 @@ struct Cli {
     /// Path to output file in DIMACS format.
     /// If the problem is SAT, contains two lines: "s SATISFIABLE\nv 1 2 ... 0\n",
     /// else contains a single line: "s UNSATISFIABLE" or "s INDET".
-    #[arg(short = 'o', long = "output", value_name = "FILE")]
-    path_output: Option<PathBuf>,
+    // #[arg(short = 'o', long = "output", value_name = "FILE")]
+    // path_output: Option<PathBuf>,
 
     /// Path to a file with results.
     #[arg(long = "results", value_name = "FILE")]
@@ -231,7 +232,8 @@ fn main() -> color_eyre::Result<()> {
     let mut searcher = BackdoorSearcher::new(SatSolver::new_cadical(solver), pool, options);
 
     // Create and open the file with derived clauses:
-    let mut file_derived_clauses = Some(create_line_writer("derived_clauses.txt"));
+    // let mut file_derived_clauses = Some(create_line_writer("derived_clauses.txt"));
+    let mut file_derived_clauses: Option<LineWriter<File>> = None;
 
     // Create and open the file with results:
     let mut file_results = args.path_results.as_ref().map(create_line_writer);
@@ -1507,53 +1509,23 @@ fn main() -> color_eyre::Result<()> {
         }
     }
 
-    let res = if _unsat {
-        if let Some(path) = &args.path_output {
-            let mut f = create_line_writer(path);
-            writeln!(f, "s UNSATISFIABLE")?;
-        }
-        "UNSAT"
+    if _unsat {
+        info!("UNSAT in {:.3} s", start_time.elapsed().as_secs_f64());
+        println!("s UNSATISFIABLE");
+        std::process::exit(20);
     } else if let Some(model) = &final_model {
-        if let Some(path) = &args.path_output {
-            debug!("Writing SAT model in '{}'...", path.display());
-            let mut f = create_line_writer(path);
-            writeln!(f, "s SATISFIABLE")?;
-            write!(f, "v ")?;
-            for &lit in model.iter() {
-                write!(f, "{} ", lit)?;
-            }
-            writeln!(f, "0")?;
+        info!("SAT in {:.3} s", start_time.elapsed().as_secs_f64());
+        println!("s SATISFIABLE");
+        print!("v ");
+        for &lit in model.iter() {
+            print!("{} ", lit);
         }
-        {
-            debug!("Checking model...");
-            match &searcher.solver {
-                SatSolver::Cadical(solver) => {
-                    for &lit in model.iter() {
-                        if solver.val(lit.to_external()).unwrap() != LitValue::True {
-                            log::warn!("lit {} is inconsistent in model", lit);
-                        }
-                    }
-                    let lits = model.iter().map(|lit| lit.to_external()).collect_vec();
-                    let (res, _) = solver.propcheck(&lits, true, false, true);
-                    if res {
-                        debug!("Model is correct");
-                    } else {
-                        log::error!("Model is incorrect");
-                        let core = solver.propcheck_get_core();
-                        log::error!("core: {:?}", core);
-                    }
-                }
-            }
-        }
-        "SAT"
+        println!("0");
+        std::process::exit(10);
     } else {
-        if let Some(path) = &args.path_output {
-            let mut f = create_line_writer(path);
-            writeln!(f, "s INDET")?;
-        }
-        "INDET"
+        info!("INDET in {:.3} s", start_time.elapsed().as_secs_f64());
+        println!("s INDETERMINATE");
     };
 
-    println!("s {} in {:.3} s", res, start_time.elapsed().as_secs_f64());
     Ok(())
 }
