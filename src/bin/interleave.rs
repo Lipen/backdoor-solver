@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{LineWriter, Write};
 use std::path::PathBuf;
@@ -1516,11 +1517,16 @@ fn main() -> color_eyre::Result<()> {
     } else if let Some(model) = &final_model {
         info!("SAT in {:.3} s", start_time.elapsed().as_secs_f64());
         println!("s SATISFIABLE");
-        print!("v ");
+        let mut line = "v".to_string();
         for &lit in model.iter() {
-            print!("{} ", lit);
+            if line.len() + format!(" {}", lit).len() > 100 {
+                println!("{}", line);
+                line = "v".to_string();
+            }
+            write!(line, " {}", lit)?;
         }
-        println!("0");
+        write!(line, " 0")?;
+        println!("{}", line);
         std::process::exit(10);
     } else {
         info!("INDET in {:.3} s", start_time.elapsed().as_secs_f64());
