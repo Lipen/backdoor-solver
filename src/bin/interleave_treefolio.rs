@@ -376,13 +376,10 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         let num_active = match &searcher.solver {
             SatSolver::Cadical(solver) => solver.active(),
         };
-        let num_propagations = match &searcher.solver {
-            SatSolver::Cadical(solver) => solver.propagations(),
-        };
         let num_binary = match &searcher.solver {
             SatSolver::Cadical(solver) => solver.all_clauses_iter().filter(|c| c.len() == 2).count(),
         };
-        if num_active <= 17894 && num_propagations <= 82671164 && num_binary <= 1240 {
+        if num_active <= 17894 && num_binary <= 1240 {
             config = int_118;
         } else {
             info!("Solving with CaDiCaL...");
