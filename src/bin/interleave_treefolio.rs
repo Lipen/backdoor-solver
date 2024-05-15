@@ -321,7 +321,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     let mut config: Configuration = Default::default();
 
     let num_large = match &searcher.solver {
-        SatSolver::Cadical(solver) => solver.all_clauses_iter().filter(|c| c.len() > 3).count(),
+        SatSolver::Cadical(solver) => solver.clauses_iter().filter(|c| c.len() > 3).count(),
     };
     if num_large <= 2000 {
         config = int_126;
