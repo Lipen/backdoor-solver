@@ -242,8 +242,6 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     // Cartesian product of hard tasks:
     let mut cubes_product: Vec<Vec<Lit>> = vec![vec![]];
 
-    let time_runs = Instant::now();
-
     let mut total_time_extract = Duration::ZERO;
 
     let mut final_model: Option<Vec<Lit>> = None;
@@ -1523,29 +1521,29 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         info!("Done run {} in {:.1}s", run_number, time_run.as_secs_f64());
     }
 
-    let time_runs = time_runs.elapsed();
-    info!("Finished {} runs in {:.1}s", run_number, time_runs.as_secs_f64());
-    info!(
-        "Total derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
-        all_derived_clauses.len(),
-        all_derived_clauses.iter().filter(|c| c.len() == 1).count(),
-        all_derived_clauses.iter().filter(|c| c.len() == 2).count(),
-        all_derived_clauses.iter().filter(|c| c.len() == 3).count(),
-        all_derived_clauses.iter().filter(|c| c.len() > 2).count()
-    );
-
-    debug!("Time spent on extracting all clauses: {:.3}s", total_time_extract.as_secs_f64());
-
-    match &searcher.solver {
-        SatSolver::Cadical(solver) => {
-            if !args.no_stats {
-                solver.print_statistics();
-                solver.print_resources();
-            }
-        }
-    }
-
-    Ok(SolveResult::UNKNOWN)
+    // let time_runs = time_runs.elapsed();
+    // info!("Finished {} runs in {:.1}s", run_number, time_runs.as_secs_f64());
+    // info!(
+    //     "Total derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
+    //     all_derived_clauses.len(),
+    //     all_derived_clauses.iter().filter(|c| c.len() == 1).count(),
+    //     all_derived_clauses.iter().filter(|c| c.len() == 2).count(),
+    //     all_derived_clauses.iter().filter(|c| c.len() == 3).count(),
+    //     all_derived_clauses.iter().filter(|c| c.len() > 2).count()
+    // );
+    //
+    // debug!("Time spent on extracting all clauses: {:.3}s", total_time_extract.as_secs_f64());
+    //
+    // match &searcher.solver {
+    //     SatSolver::Cadical(solver) => {
+    //         if !args.no_stats {
+    //             solver.print_statistics();
+    //             solver.print_resources();
+    //         }
+    //     }
+    // }
+    //
+    // Ok(SolveResult::UNKNOWN)
 }
 
 fn main() -> color_eyre::Result<()> {
