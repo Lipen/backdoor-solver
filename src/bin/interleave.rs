@@ -1530,7 +1530,7 @@ fn main() -> color_eyre::Result<()> {
         std::process::exit(10);
     } else {
         info!("INDET in {:.3} s", start_time.elapsed().as_secs_f64());
-        println!("s INDETERMINATE");
+        println!("s UNKNOWN");
     };
 
     Ok(())
