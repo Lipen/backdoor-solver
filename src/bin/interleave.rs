@@ -1078,8 +1078,8 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                 }
             }
 
-            if final_model.is_some() {
-                break;
+            if let Some(model) = final_model {
+                return Ok(SolveResult::SAT(model));
             }
 
             // Populate the set of ALL clauses:
