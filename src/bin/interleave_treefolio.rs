@@ -320,101 +320,101 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     };
     let mut config: Configuration = Default::default();
 
-    if let Some(result) = searcher.run(
-        config.backdoor_size,
-        config.num_iters,
-        config.stagnation_limit,
-        args.run_timeout,
-        Some(((1u64 << config.backdoor_size) - 1) as f64 / (1u64 << config.backdoor_size) as f64),
-        0,
-        None,
-    ) {
-        let backdoor = result.best_instance.get_variables();
-        let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
-        debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard.len());
-        assert_eq!(hard.len() as u64, result.best_fitness.num_hard);
+    // if let Some(result) = searcher.run(
+    //     config.backdoor_size,
+    //     config.num_iters,
+    //     config.stagnation_limit,
+    //     args.run_timeout,
+    //     Some(((1u64 << config.backdoor_size) - 1) as f64 / (1u64 << config.backdoor_size) as f64),
+    //     0,
+    //     None,
+    // ) {
+    //     let backdoor = result.best_instance.get_variables();
+    //     let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
+    //     debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard.len());
+    //     assert_eq!(hard.len() as u64, result.best_fitness.num_hard);
+    //
+    //     if hard.len() == 0 {
+    //         info!("Found strong backdoor: {}", DisplaySlice(&backdoor));
+    //
+    //         info!("Just solving...");
+    //         match &mut searcher.solver {
+    //             SatSolver::Cadical(solver) => {
+    //                 solver.reset_assumptions();
+    //                 let time_solve = Instant::now();
+    //                 let res = solver.solve().unwrap();
+    //                 let time_solve = time_solve.elapsed();
+    //                 match res {
+    //                     SolveResponse::Interrupted => {
+    //                         info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+    //                         // do nothing
+    //                     }
+    //                     SolveResponse::Unsat => {
+    //                         info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+    //                         return Ok(SolveResult::UNSAT);
+    //                     }
+    //                     SolveResponse::Sat => {
+    //                         info!("SAT in {:.1} s", time_solve.as_secs_f64());
+    //                         let model = (1..=solver.vars())
+    //                             .map(|i| {
+    //                                 let v = Var::from_external(i as u32);
+    //                                 match solver.val(i as i32).unwrap() {
+    //                                     LitValue::True => Lit::new(v, false),
+    //                                     LitValue::False => Lit::new(v, true),
+    //                                 }
+    //                             })
+    //                             .collect_vec();
+    //                         return Ok(SolveResult::SAT(model));
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //
+    //         // unreachable!();
+    //     }
 
-        if hard.len() == 0 {
-            info!("Found strong backdoor: {}", DisplaySlice(&backdoor));
-
-            info!("Just solving...");
-            match &mut searcher.solver {
-                SatSolver::Cadical(solver) => {
-                    solver.reset_assumptions();
-                    let time_solve = Instant::now();
-                    let res = solver.solve().unwrap();
-                    let time_solve = time_solve.elapsed();
-                    match res {
-                        SolveResponse::Interrupted => {
-                            info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
-                            // do nothing
-                        }
-                        SolveResponse::Unsat => {
-                            info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
-                            return Ok(SolveResult::UNSAT);
-                        }
-                        SolveResponse::Sat => {
-                            info!("SAT in {:.1} s", time_solve.as_secs_f64());
-                            let model = (1..=solver.vars())
-                                .map(|i| {
-                                    let v = Var::from_external(i as u32);
-                                    match solver.val(i as i32).unwrap() {
-                                        LitValue::True => Lit::new(v, false),
-                                        LitValue::False => Lit::new(v, true),
-                                    }
-                                })
-                                .collect_vec();
-                            return Ok(SolveResult::SAT(model));
-                        }
+    let num_active = match &searcher.solver {
+        SatSolver::Cadical(solver) => solver.active(),
+    };
+    let num_binary = match &searcher.solver {
+        SatSolver::Cadical(solver) => solver.all_clauses_iter().filter(|c| c.len() == 2).count(),
+    };
+    if num_active <= 17894 && num_binary <= 1240 {
+        config = int_118;
+    } else {
+        info!("Solving with CaDiCaL...");
+        match &searcher.solver {
+            SatSolver::Cadical(solver) => {
+                let time_solve = Instant::now();
+                let res = solver.solve().unwrap();
+                let time_solve = time_solve.elapsed();
+                match res {
+                    SolveResponse::Interrupted => {
+                        info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+                        // do nothing
                     }
-                }
-            }
-
-            // unreachable!();
-        }
-
-        let num_active = match &searcher.solver {
-            SatSolver::Cadical(solver) => solver.active(),
-        };
-        let num_binary = match &searcher.solver {
-            SatSolver::Cadical(solver) => solver.all_clauses_iter().filter(|c| c.len() == 2).count(),
-        };
-        if num_active <= 17894 && num_binary <= 1240 {
-            config = int_118;
-        } else {
-            info!("Solving with CaDiCaL...");
-            match &searcher.solver {
-                SatSolver::Cadical(solver) => {
-                    let time_solve = Instant::now();
-                    let res = solver.solve().unwrap();
-                    let time_solve = time_solve.elapsed();
-                    match res {
-                        SolveResponse::Interrupted => {
-                            info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
-                            // do nothing
-                        }
-                        SolveResponse::Unsat => {
-                            info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
-                            return Ok(SolveResult::UNSAT);
-                        }
-                        SolveResponse::Sat => {
-                            info!("SAT in {:.1} s", time_solve.as_secs_f64());
-                            let model = (1..=solver.vars())
-                                .map(|i| {
-                                    let v = Var::from_external(i as u32);
-                                    match solver.val(i as i32).unwrap() {
-                                        LitValue::True => Lit::new(v, false),
-                                        LitValue::False => Lit::new(v, true),
-                                    }
-                                })
-                                .collect_vec();
-                            return Ok(SolveResult::SAT(model));
-                        }
+                    SolveResponse::Unsat => {
+                        info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+                        return Ok(SolveResult::UNSAT);
+                    }
+                    SolveResponse::Sat => {
+                        info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                        let model = (1..=solver.vars())
+                            .map(|i| {
+                                let v = Var::from_external(i as u32);
+                                match solver.val(i as i32).unwrap() {
+                                    LitValue::True => Lit::new(v, false),
+                                    LitValue::False => Lit::new(v, true),
+                                }
+                            })
+                            .collect_vec();
+                        return Ok(SolveResult::SAT(model));
                     }
                 }
             }
         }
     }
+    // }
 
     let mut budget_filter = config.budget_filter;
     let mut budget_solve = config.budget_solve;
