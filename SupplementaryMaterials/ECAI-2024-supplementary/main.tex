@@ -1,0 +1,437 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{rotating}
+\usepackage{csquotes}
+\usepackage{array}
+\usepackage{subfiles}
+\usepackage{booktabs}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage[shortcuts]{extdash}
+\usepackage[Export]{adjustbox}
+
+
+%% EMERGENCY STRETCH
+\emergencystretch=1em
+
+%% Table headers
+\renewcommand\theadfont{\bfseries\normalsize}
+\renewcommand\theadset{\def\arraystretch{.8}}
+
+%% Union, intersection, empty set
+\newcommand\union{\cup}
+\newcommand\intersection{\cap}
+\renewcommand\emptyset{\varnothing}
+
+%% Command for rotating text in tables
+\newcommand*\rot{\rotatebox{90}}
+
+
+%% Algorithms
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+
+\SetKwFunction{InitSolver}{initialize\_sat\_solver}
+\SetKwFunction{InitEA}{initialize\_evolutionary\_algorithm}
+\SetKwFunction{Search}{ea.search}
+\SetKwFunction{GetHardTasks}{get\_hard\_tasks}
+\SetKwFunction{CartesianProduct}{cartesian\_product}
+\SetKwFunction{Concatenate}{concatenate}
+\SetKwFunction{Assume}{solver.assume}
+\SetKwFunction{Propagate}{solver.propagate}
+\SetKwFunction{len}{len}
+\SetKwFunction{Solve}{solver.solve}
+\SetKwFunction{SortCubes}{greedy\_sort\_hard\_tasks}
+\SetKwFunction{GetConflicts}{solver.get\_conflicts}
+\SetKwFunction{Rescore}{rescore}
+\SetKwFunction{ExtractLemma}{solver.extract\_unsat\_core}
+\SetKwFunction{GetBestCube}{greedily\_choose\_best\_hard\_task}
+\SetKwFunction{AddClause}{solver.add\_clause}
+\SetKwFunction{CountOccurrences}{count\_occurrences}
+
+\SetKwData{CNF}{CNF}
+\SetKwData{solver}{solver}
+\SetKwData{ea}{ea}
+\SetKwData{seed}{seed}
+\SetKwData{stagnationlimit}{stagnation\_limit}
+\SetKwData{banUsed}{ban\_used}
+\SetKwData{cube}{cube}
+\SetKwData{cubes}{hard\_tasks}
+\SetKwData{cubesPrime}{new\_hard\_tasks}
+\SetKwData{cubesBackdoor}{hard\_tasks\_in\_backdoor}
+\SetKwData{backdoor}{backdoor}
+\SetKwData{backdoorSize}{backdoor\_size}
+\SetKwData{numIters}{num\_iters}
+\SetKwData{deriveTernary}{derive\_ternary}
+\SetKwData{budgetPresolve}{budget\_presolve}
+\SetKwData{maxProduct}{max\_product}
+\SetKwData{numConflicts}{num\_conflicts}
+\SetKwData{budgetFilter}{budget\_filter}
+\SetKwData{budgetSolve}{budget\_solve}
+\SetKwData{factorBudgetFilter}{factor\_budget\_filter}
+\SetKwData{factorBudgetSolve}{factor\_budget\_solve}
+\SetKwData{useSortedFiltering}{use\_sorted\_filtering}
+\SetKwData{conflictsLimit}{conflicts\_limit}
+\SetKwData{bestCube}{best\_hard\_task}
+\SetKwData{indetCubes}{indet\_cubes}
+\SetKwData{lemma}{lemma}
+\SetKwData{SAT}{SAT}
+\SetKwData{UNSAT}{UNSAT}
+\SetKwData{INDET}{INDET}
+\SetKwData{old}{old}
+\SetKwData{new}{new}
+
+\SetKw{Break}{break}
+\SetKw{Continue}{continue}
+
+\SetArgSty{}
+
+
+%% Setup bookmarks
+% Note: load `bookmark` before `hyperref`
+% Note: use [numbered] option to obtain numbered sections
+\usepackage[numbered]{bookmark}
+
+%% Setup hyperref
+\usepackage{hyperref}
+\hypersetup{
+    breaklinks=true,% allow links to break over lines
+    pdfstartview=,% empty = viewer's defaults
+    colorlinks,
+    allcolors=black,
+    linkcolor=MidnightBlue,
+    citecolor=MidnightBlue,
+    urlcolor=MidnightBlue,
+}
+
+%% Enable correct jumping to figures when referencing
+\usepackage[all]{hypcap}
+
+%% Load cleveref last
+\usepackage[capitalize,nameinlink]{cleveref}
+
+
+\begin{document}
+
+\begin{center}
+    {\large\bfseries Using Backdoors to Generate Learnt Information in SAT Solving}
+\end{center}
+\begin{center}
+    {\bfseries Supplementary material for paper \#1245}
+\end{center}
+
+The document is divided into two informative sections.
+The first section offers an in-depth view of our \texttt{Interleave} procedure, showcasing the pseudocode with detailed clarifications.
+The second section focuses on the computational experiments.
+It provides a breakdown of the results via two tables.
+The first table summarizes statistics, including the number of SAT/UNSAT instances and the PAR-2 score of the tested configurations.
+The second table details the parameters of the tested configurations, providing a clear view of our experimental setup.
+
+
+
+\section{Interleave algorithm}
+
+The Interleave procedure, presented in \cref{alg:interleave}, functions akin to a SAT solver, accepting CNF and its parameters as input and outputting the result as SAT/UNSAT.
+The parameters of the algorithm can be broadly divided into three categories:
+\begin{itemize}
+    \item Parameters for the Evolutionary Algorithm (EA) responsible for finding backdoors: \backdoorSize, \banUsed, \seed, \numIters, \stagnationlimit.
+
+    \item Parameters for the procedure that handles hard tasks, such as applying a limited solver to their filtering: \maxProduct, \numConflicts.
+    % \useSortedFiltering.
+
+    \item Parameters for the general procedure that interleaves the usual solving via CaDiCaL and the $\rho$\=/backdoor based methods described in the paper: \budgetFilter, \budgetSolve, \factorBudgetFilter, \factorBudgetSolve, \deriveTernary, \budgetPresolve.
+\end{itemize}
+
+The algorithm operates in two alternating phases.
+The first, \emph{$\rho$\=/backdoor phase} involves the search for backdoors, the construction of hard tasks, their filtration through a limited solver, and the derivation of short clauses from these tasks.
+The second phase solely involves running CaDiCaL.
+Both phases continue until a predefined budget for the number of conflicts is exhausted.
+These budgets are distinct and adjustable, with each being multiplied by a factor after each phase ends.
+Overall, these alternating phases resemble how CDCL solvers switch between what is now known as \emph{focused} and \emph{stable} phases.
+
+Before the actual interleave procedure, we \enquote{presolve} the given CNF using CaDiCaL with the specified \budgetPresolve.
+% Typically, we use 100000 conflict.
+This allows for filtering out \enquote{easy} problems that do not require a complex approach, i.e. for which \enquote{just running CaDiCaL} is enough.
+
+The \emph{$\rho$\=/backdoor phase} begins by searching for a backdoor using an evolutionary algorithm similar to the well-known (1+1)-EA, but with the mutation operator designed to transform sets of variables of size~$n$ to sets of the same size.
+This is more convenient as we always obtain the backdoors of a fixed size.
+The maximum number of mutations is determined by the \numIters parameter. Alternatively, if \stagnationlimit is specified, it allows to break out of the EA loop early if the best fitness value have not improved in \stagnationlimit iterations.
+The algorithm employs~$\rho$ as the fitness function, which is computed efficiently using unit propagation (UP).
+
+Central to the \emph{$\rho$\=/backdoor phase} is the concept of a set of hard tasks, which can be viewed as a representation of a $\rho$\=/backdoor.
+% TODO: double-check the section number
+By combining $\rho$\=/backdoors, we can construct a larger $\rho$\=/backdoor with a better (larger) $\rho$ value by exclusively working with the hard tasks of the original backdoors (refer to Section~3.2 of the paper for details).
+Therefore, each new backdoor discovered by EA is used to refine and expand the current set of hard tasks.
+This set is further filtered both by UP and by the limited solver (with the specified conflicts budget \numConflicts per single hard task).
+
+% TODO: double-check the section number
+We use the greedy algorithm to select the most promising hard tasks for filtering with the limited solver, as described in Section~3.5 of the paper, aiming primarily at binary clauses ($k = 2$).
+This means that the bipartite graph consists of vertices corresponding to all $4 \binom{n}{2}$ potential binary clauses on one side, and all hard tasks (each of length~$n$) on the other.
+When we prove that a hard task is UNSAT, we update the scores of all its neighbors in the graph.
+If the budget was insufficient to prove SAT or UNSAT, we update the graph by removing all potential binary clauses adjacent to the processed hard task (and update the scores of their neighbors), as they have no chance of being derived in the current round of filtering.
+% Also, when the limited solver proves unsatisfiability, we extract the unsatisfiable core, i.e., the assumptions directly responsible for this.
+% If this core is small, we add the corresponding clause as a new constraint, treating it as a derived clause.
+
+Finally, to derive clauses, we utilize a simple algorithm similar to Failed Literal Probing.
+We traverse through all hard tasks and check whether a particular combination of literals does not appear in any of them.
+If such a combination is absent, we derive its negation, i.e., the clause consisting of negated literals.
+\looseness=-1
+
+
+\begin{algorithm}[H]
+\caption{Interleave}
+\label{alg:interleave}
+\DontPrintSemicolon
+\SetKwFor{WhileWithoutEnd}{while}{do}{}
+
+\KwData{
+\CNF is the input formula,
+\seed is the random seed,
+\banUsed is the option for excluding the seen variables from being repeatedly found in different backdoors in the consecutive EA runs,
+\backdoorSize is the size of each backdoor,
+\numIters is the number of EA iterations,
+\stagnationlimit is the number of stagnations for early termination of EA,
+\budgetPresolve is the conflicts budget for the pre-solving phase,
+\maxProduct is the maximum size of the set of hard tasks,
+\numConflicts is the conflicts budget for each invocation of limited solving during the filtration phase,
+\budgetFilter is the total conflicts budget for the filtration phase,
+\budgetSolve is the conflicts budget for the solving phase,
+\factorBudgetFilter and \factorBudgetSolve are factors for exponentially scaling the budgets after filtration/solving,
+% \useSortedFiltering is a flag for using greedy heuristic for sorting hard tasks,
+\deriveTernary is a flag for deriving ternary clauses.
+}
+\KwResult{SAT/UNSAT as the result of solving SAT for the given \CNF.}
+
+$\solver \gets \InitSolver{\CNF}$ \;
+$\ea \gets \InitEA{\seed, \banUsed}$ \;
+$\cubes \gets \{[~]\}$ \tcc*{set of hard tasks, initialized with a single empty task}
+
+% Presolve via Cadical:
+\BlankLine
+\Switch{\Solve{\budgetPresolve}}{
+    \lCase{\SAT}{\Return \SAT}
+    \lCase{\UNSAT}{\Return \UNSAT}
+    \lCase{\INDET}{\Continue}
+}
+\BlankLine
+
+\SetAlgoLined
+\WhileWithoutEnd{true}{
+\SetAlgoVlined
+    % \tcp{Search for a backdoor using Evolutionary Algorithm}
+    \backdoor $\gets$ \Search{\backdoorSize, \numIters, \stagnationlimit} \;
+    % \tcp{Determine all hard tasks (unsolvable via UP) for the found backdoor}
+    \cubesBackdoor $\gets$ \GetHardTasks{\backdoor} \;
+
+    \BlankLine
+
+    % \tcp{Compute the Cartesian product of hard tasks}
+    $\cubesPrime \gets \emptyset$ \tcc*{initialize an empty set of hard tasks}
+    \For{$(\old, \new)$ in \CartesianProduct{\cubes, \cubesBackdoor}}{
+        $\cube \gets \Concatenate{\old, \new}$ \;
+        \If{\cube does not contain complementary literals}{
+            $\cubesPrime \gets \cubesPrime \union \{\cube\}$ \;
+        }
+    }
+    $\cubes \gets \cubesPrime$ \tcc*{override the set of hard tasks}
+
+    \BlankLine
+
+    \tcc{Filter hard tasks using UP}
+    \ForEach{\cube in \cubes}{
+        \Assume{\cube} \;
+        \Switch{$\Propagate{}$}{
+            \lCase{\SAT}{\Return \SAT}
+            \lCase{\UNSAT}{$\cubes = \cubes \setminus \cube$}
+            \lCase{\INDET}{\Continue}
+        }
+    }
+
+    \lIf{$\len{\cubes} = 0$}{\Return \UNSAT}
+
+    \If{$\len{\cubes} > \maxProduct$}{
+        $\cubes \gets \{[~]\}$ \tcc*{reset the set of hard tasks}
+        \Break \;
+    }
+
+    \BlankLine
+
+    \tcc{Filter hard tasks using limited solver}
+    $\conflictsLimit \gets \GetConflicts{} + \budgetFilter$ \;
+    % \uIf(\tcc*[h]{Use greedy heuristic for sorting hard tasks during the filtration (see paper for details)}){\useSortedFiltering}{
+        $\indetCubes \gets \emptyset$\;
+        \tcc{Proceed until the conflicts budget is exhausted}
+        \While{$\GetConflicts{} \leq \conflictsLimit$}{
+            % \tcc{Choose the cube with max score }
+            $\bestCube \gets \GetBestCube{\cubes}$ \;
+            $\cubes = \cubes \setminus \bestCube$ \;
+
+            \BlankLine
+            \Assume{\bestCube} \;
+            \Switch{\Solve{\numConflicts}}{
+                \lCase{\SAT}{\Return \SAT}
+                \lCase{\UNSAT}{\Rescore{}}
+                \lCase{\INDET}{$\indetCubes \gets \indetCubes \union \bestCube$}
+            }
+        }
+        $\cubes \gets \cubes \union \indetCubes$ \;
+    % }
+    % MANUAL PAGE BREAK HERE
+}
+\end{algorithm}
+
+\setcounter{algocf}{0}
+\begin{algorithm}[H]
+\caption{Interleave (continued)}
+\DontPrintSemicolon
+\setcounter{AlgoLine}{37}% place here the last line
+\SetKwBlock{BrokenBlock}{}{end}
+
+\BrokenBlock({(continuation of the outer while loop)}){
+    % \Else{
+    %     \tcc{Randomly draw from the set of hard tasks}
+    %     \ForEach{\cube in \cubes}{
+    %         \lIf{$\GetConflicts{} > \conflictsLimit$}{\Break}
+
+    %         \Assume{\cube} \;
+    %         \Switch{\Solve{\numConflicts}}{
+    %             \lCase{\SAT}{\Return \SAT}
+    %             % \Case{\UNSAT}{
+    %             %     \cubes = \cubes $\setminus$ \cube \;
+    %             %     \lemma $\gets$ \ExtractLemma{} \;
+    %             %     \lIf{\len{\lemma} $\leq$ $5$}{\AddClause{\lemma}}
+    %             % }
+    %             \lCase{\UNSAT}{\cubes = \cubes $\setminus$ \cube}
+    %         }
+    %     }
+    % }
+
+    \lIf{$\len{\cubes} = 0$}{\Return \UNSAT}
+
+    \If{$\GetConflicts{} > \conflictsLimit$}{
+        $\budgetFilter \gets \budgetFilter \cdot \factorBudgetFilter$ \tcc*{Scale the budget}
+    }
+
+    \BlankLine
+
+    \tcc{Derive unit clauses}
+    \ForEach{literal $l$}{
+        \If{$\CountOccurrences{\ensuremath{l}, \cubes} = 0$}{
+            \AddClause{$\neg l$}
+        }
+    }
+    \tcc{Derive binary clauses}
+    \ForEach{pair of literals $(l_1, l_2)$}{
+        \If{$\CountOccurrences{\ensuremath{(l_1, l_2)}, \cubes} = 0$}{
+            \AddClause{$\neg l_1 \lor \neg l_2$}
+        }
+    }
+    \tcc{Derive ternary clauses}
+    \If{\deriveTernary}{
+        \ForEach{triple of literals $(l_1, l_2, l_3)$}{
+            \If{$\CountOccurrences{\ensuremath{(l_1, l_2, l_3)}, \cubes} = 0$}{
+                \AddClause{$\neg l_1 \lor \neg l_2 \lor \neg l_3$}
+            }
+        }
+    }
+
+    \BlankLine
+
+    % Solve via Cadical:
+    \Switch{\Solve{\budgetSolve}}{
+        \lCase{\SAT}{\Return \SAT}
+        \lCase{\UNSAT}{\Return \UNSAT}
+        \lCase{\INDET}{\Continue}
+    }
+
+    % Exponentially scale the budget for solve:
+    $\budgetSolve \gets \budgetSolve \cdot \factorBudgetSolve$ \tcc*{Scale the budget}
+}
+\end{algorithm}
+
+
+\newpage
+
+\section{Additional Details on Computational Experiments}
+
+In the experiments we used several \texttt{Interleave} configurations, that are denoted \texttt{Int-118} to \texttt{Int-126}.
+They all share the following values of parameters:
+\begin{itemize}
+    \item $\backdoorSize = 10$
+    \item $\numIters = 10000$
+    \item $\numConflicts = 1000$
+    \item $\stagnationlimit = 1000$
+\end{itemize}
+The values of the remaining parameters are shown in \cref{tab:configurations}.
+
+
+\def\myno{no}
+\def\myyes{yes}
+
+
+\begin{table}[!htb]
+    \centering
+    \caption{Parameters of Interleave configurations}
+    \label{tab:configurations}
+    \medskip
+    \setlength{\tabcolsep}{0.5em}%
+    \begin{tabular}{lcccccccc}
+    \toprule
+        \thead{Parameter} &
+        \thead{Int-118} &
+        \thead{Int-120} &
+        \thead{Int-121} &
+        \thead{Int-126} \\
+    \midrule
+    %
+    \banUsed & \myyes & \myyes & \myyes & \myyes \\
+    \budgetPresolve & 100000 & --- & 100000 & 100000  \\
+    \deriveTernary & \myno & \myno & \myno & \myno \\
+    \maxProduct & 10000 & 10000 & 10000 & 10000 \\
+    \budgetFilter & 100000 & 10000 & 10000 & 10000 \\
+    \factorBudgetFilter & 1.1 & 1.1 & 1.1 & 1.1 \\
+    \budgetSolve & 100000 & 100000 & 100000 & 100000  \\
+    \factorBudgetSolve & 1.2 & 1.2 & 1.3 & 1.5 \\
+    %
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+The detailed statistics on the results of interleave configurations and CaDiCaL 1.9.5 on the SAT competition 2022 and~2023 benchmarks is presented in \cref{tab:results}.
+
+
+\begin{table}[!htb]
+    \label{tab:results}
+    \centering
+    \caption{Detailed statistics on the number of solved instances for each configuration and CaDiCaL 1.9.5}
+    \medskip
+    \setlength{\tabcolsep}{0.5em}%
+    \begin{tabular}{ccccc}
+        \toprule
+            \thead{Configuration} &
+            \thead{SAT} &
+            \thead{UNSAT} &
+            \thead{TOTAL} &
+            \thead{PAR-2} \\
+        \midrule
+        %
+        \textbf{CaDiCaL 1.9.5} & 18 & 70 & 88/116 & 4196 \\
+        \textbf{Interleave-118} & 19 & 70 & 89/116 & 4188 \\
+        \textbf{Interleave-120} & 21 & 76 & 97/116 & 3659 \\
+        \textbf{Interleave-121} & 18 & 75 & 94/116 & 3955 \\
+        \textbf{Interleave-126} & 17 & 74 & 91/116 & 3943 \\
+        \textbf{Interleave-VBS} & 21 & 76 & 98/116 & 3221 \\
+        %
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\end{document}
