@@ -2,6 +2,8 @@
 
 > SAT solver based on rho-backdoors.
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13375122.svg)](https://doi.org/10.5281/zenodo.13375122)
+
 ## Instructions
 
 ```sh
