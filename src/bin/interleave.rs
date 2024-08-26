@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{LineWriter, Write};
+use std::io::LineWriter;
+use std::io::Write as _;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -139,15 +140,23 @@ struct Cli {
     #[arg(long)]
     proof_no_binary: bool,
 
-    /// Do compute cores for easy tasks and invalid cubes.
+    /// Do compute cores for easy tasks.
     #[arg(long)]
-    compute_cores: bool,
+    compute_cores_easy: bool,
+
+    /// Do compute cores for invalid cubes.
+    #[arg(long)]
+    compute_cores_invalid: bool,
+
+    /// Do compute cores during filtering.
+    #[arg(long)]
+    compute_cores_filtering: bool,
 
     /// Do add lemmas from cores for easy tasks.
     #[arg(long)]
     add_cores_easy: bool,
 
-    /// Do add lemmas from cores for invalid tasks.
+    /// Do add lemmas from cores for invalid cubes.
     #[arg(long)]
     add_cores_invalid: bool,
 
@@ -395,7 +404,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                 }
             };
 
-            if args.compute_cores {
+            if args.compute_cores_easy {
                 match &searcher.solver {
                     SatSolver::Cadical(solver) => {
                         let vars_external: Vec<i32> = backdoor
@@ -672,7 +681,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         &trie,
                         0,
                         Some(&mut valid),
-                        if args.compute_cores { Some(&mut invalid) } else { None },
+                        if args.compute_cores_invalid { Some(&mut invalid) } else { None },
                     );
                 }
             }
@@ -687,7 +696,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                 writeln!(f, "{},propagate,{}", run_number, cubes_product.len())?;
             }
 
-            if args.compute_cores {
+            if args.compute_cores_invalid {
                 match &searcher.solver {
                     SatSolver::Cadical(solver) => {
                         debug!("Invalid sub-cubes: {}", invalid.len());
@@ -1018,7 +1027,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                                         debug!("Rescored in {:.1}s", time_rescore.as_secs_f64());
                                     }
 
-                                    if args.compute_cores {
+                                    if args.compute_cores_filtering {
                                         let mut core = Vec::new();
                                         for &lit in cubes_product[best_cube].iter() {
                                             if solver.failed(lit.to_external()).unwrap() {
@@ -1191,7 +1200,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         match res {
                             SolveResponse::Interrupted => true,
                             SolveResponse::Unsat => {
-                                if args.compute_cores {
+                                if args.compute_cores_filtering {
                                     let mut core = Vec::new();
                                     for &lit in cube {
                                         if solver.failed(lit.to_external()).unwrap() {
@@ -1478,13 +1487,13 @@ fn main() -> color_eyre::Result<()> {
     let args = Cli::parse();
     info!("args = {:?}", args);
 
-    if args.add_cores_easy && !args.compute_cores {
+    if args.add_cores_easy && !args.compute_cores_easy {
         bail!("Cannot add easy cores (`--add-cores-easy` flag) without computing them (`--compute-cores` flag)");
     }
-    if args.add_cores_invalid && !args.compute_cores {
+    if args.add_cores_invalid && !args.compute_cores_invalid {
         bail!("Cannot add invalid cores (`--add-cores-invalid` flag) without computing them (`--compute-cores` flag)");
     }
-    if args.add_cores_filtering && !args.compute_cores {
+    if args.add_cores_filtering && !args.compute_cores_filtering {
         bail!("Cannot add cores (`--add-cores-filtering` flag) without computing them (`--compute-cores` flag)");
     }
 
