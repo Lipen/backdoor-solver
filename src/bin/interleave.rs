@@ -143,9 +143,17 @@ struct Cli {
     #[arg(long)]
     compute_cores: bool,
 
-    /// Do add lemmas from cores.
+    /// Do add lemmas from cores for easy tasks.
     #[arg(long)]
-    add_cores: bool,
+    add_cores_easy: bool,
+
+    /// Do add lemmas from cores for invalid tasks.
+    #[arg(long)]
+    add_cores_invalid: bool,
+
+    /// Do add lemmas from cores during filtering.
+    #[arg(long)]
+    add_cores_filtering: bool,
 
     /// Maximum core size to be added (0 = unlimited).
     #[arg(long, default_value_t = 0)]
@@ -441,7 +449,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         debug!("Unique cores from easy tasks: {}", easy_cores.len());
                         debug!("[{}]", easy_cores.iter().map(|c| DisplaySlice(c)).join(", "));
 
-                        if args.add_cores {
+                        if args.add_cores_easy {
                             debug!("Adding {} cores...", easy_cores.len());
                             let mut num_added = 0;
                             for core in easy_cores.iter() {
@@ -713,7 +721,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         debug!("Unique cores from invalid cubes: {}", invalid_cores.len());
                         debug!("[{}]", invalid_cores.iter().map(|c| DisplaySlice(c)).join(", "));
 
-                        if args.add_cores {
+                        if args.add_cores_invalid {
                             debug!("Adding {} cores...", invalid_cores.len());
                             let mut num_added = 0;
                             for core in invalid_cores.iter() {
@@ -1103,7 +1111,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                 }
             }
 
-            if args.add_cores {
+            if args.add_cores_filtering {
                 debug!("Adding {} cores...", cores.len());
                 let mut num_added = 0;
                 for core in cores.iter() {
@@ -1248,7 +1256,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                 }
             }
 
-            if args.add_cores {
+            if args.add_cores_filtering {
                 debug!("Adding {} cores...", cores.len());
                 let mut num_added = 0;
                 for core in cores.iter() {
@@ -1470,8 +1478,14 @@ fn main() -> color_eyre::Result<()> {
     let args = Cli::parse();
     info!("args = {:?}", args);
 
-    if args.add_cores && !args.compute_cores {
-        bail!("Cannot add cores (`--add-cores` flag) without computing them (`--compute-cores` flag)");
+    if args.add_cores_easy && !args.compute_cores {
+        bail!("Cannot add easy cores (`--add-cores-easy` flag) without computing them (`--compute-cores` flag)");
+    }
+    if args.add_cores_invalid && !args.compute_cores {
+        bail!("Cannot add invalid cores (`--add-cores-invalid` flag) without computing them (`--compute-cores` flag)");
+    }
+    if args.add_cores_filtering && !args.compute_cores {
+        bail!("Cannot add cores (`--add-cores-filtering` flag) without computing them (`--compute-cores` flag)");
     }
 
     match solve(args)? {
