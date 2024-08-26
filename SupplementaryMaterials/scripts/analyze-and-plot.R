@@ -12,7 +12,7 @@ if(!interactive()) pdf(NULL)
 
 ######################################
 
-raw <- read_csv("data/results116.csv")
+raw <- read_csv("data/results-satcomp.csv")
 
 df.wide <- raw |>
     pivot_longer(!instance, names_to = "solver", values_to = "time") |>
