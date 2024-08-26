@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.adoc'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      debug_linux:
+        type: boolean
+        description: 'Run the Linux build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
+
+jobs:
+  build:
+    name: Build and test on Linux
+    runs-on: ubuntu-latest
+    steps:
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_linux }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build all
+        run: cargo build --workspace
+
+      - name: Build and install Cadical shared library (libcadical.so)
+        working-directory: lib/cadical-sys/vendor/cadical
+        run: |
+          ./configure -fPIC
+          make -j8 shared
+          sudo install -m 644 build/libcadical.so -Dt /usr/local/lib
+
+      - name: Run ldconfig and update LD_LIBRARY_PATH
+        run: |
+          sudo ldconfig -n /usr/local/lib
+          ldconfig -p
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}/usr/local/lib" >> $GITHUB_ENV
+
+      - name: Test all
+        run: cargo test --workspace --lib --bins --tests --examples
