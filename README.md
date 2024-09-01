@@ -5,13 +5,21 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13375121.svg)](https://doi.org/10.5281/zenodo.13375121)
 [![Build Status](https://github.com/Lipen/backdoor-solver/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/backdoor-solver/actions)
 
-## Instructions
+- For ECAI-2024 related code, please refer to the [`ecai-2024`](https://github.com/Lipen/backdoor-solver/tree/ecai-2024) branch.
+- For SAT Competition 2024 related code, please refer to the [`sc2024`](https://github.com/Lipen/backdoor-solver/tree/sc2024) branch.
+
+## Setup
 
 ```sh
 git clone https://github.com/Lipen/backdoor-solver
 cd backdoor-solver
-git submodule update --init --recursive
+git submodule update --init --recursive --progress
+cargo check --workspace --lib --bins --tests
 ```
+
+Do not forget to update submodules every time you switch branches!
+
+Below, you can find instructions on how to use different components provided in this repository, for example, SAT solver and backdoor searcher.
 
 ## SAT solver
 
