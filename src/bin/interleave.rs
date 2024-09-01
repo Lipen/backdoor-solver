@@ -19,7 +19,7 @@ use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::{
-    clause_from_external, concat_cubes, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs,
+    clause_from_external, clause_to_external, concat_cubes, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs,
     propcheck_all_trie_via_internal, write_clause, DisplaySlice,
 };
 use backdoor::var::Var;
@@ -198,7 +198,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     }
     // solver.read_dimacs(&args.path_cnf, 1);
     for clause in parse_dimacs(&args.path_cnf) {
-        solver.add_clause(clause.into_iter().map(|lit| lit.to_external()));
+        solver.add_clause(clause_to_external(&clause));
     }
     if args.freeze {
         info!("Freezing variables...");
