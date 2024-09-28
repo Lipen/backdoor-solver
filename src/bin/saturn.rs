@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Condvar};
 use std::time::Instant;
 use std::{process, thread};
@@ -113,41 +113,35 @@ struct SearcherActor {
     tx_derived_clauses: Sender<Message>,
     rx_learned_clauses: Receiver<Message>,
     searcher: BackdoorSearcher,
-    all_clauses: HashSet<Vec<Lit>>,
+    all_new_clauses: HashSet<Vec<Lit>>,
     finish: Arc<AtomicBool>,
 }
 
 impl SearcherActor {
     fn new(tx_derived_clauses: Sender<Message>, rx_learned_clauses: Receiver<Message>, cli: &Cli, finish: Arc<AtomicBool>) -> Self {
-        let aux_solver = Cadical::new(); // This solver is for propagation only
+        let solver = Cadical::new(); // This solver is for propagation only
         for clause in parse_dimacs(&cli.path_cnf) {
-            aux_solver.add_clause(clause_to_external(&clause));
+            solver.add_clause(clause_to_external(&clause));
         }
-
         let pool = determine_vars_pool(&cli.path_cnf, &cli.allowed_vars, &cli.banned_vars);
         let options = Options {
             seed: cli.seed,
             ban_used_variables: cli.ban_used,
             ..DEFAULT_OPTIONS
         };
-        let searcher = BackdoorSearcher::new(SatSolver::new_cadical(aux_solver), pool, options);
-
-        let mut all_clauses = HashSet::new();
-        for clause in parse_dimacs(&cli.path_cnf) {
-            all_clauses.insert(clause);
-        }
+        let searcher = BackdoorSearcher::new(SatSolver::new_cadical(solver), pool, options);
 
         SearcherActor {
             tx_derived_clauses,
             rx_learned_clauses,
             searcher,
-            all_clauses,
+            all_new_clauses: HashSet::new(),
             finish,
         }
     }
 
     fn run(&mut self, cli: &Cli) {
-        loop {
+        'out: loop {
             if self.finish.load(Ordering::Acquire) {
                 log::info!("Finishing searcher.");
                 break;
@@ -174,7 +168,7 @@ impl SearcherActor {
                 // Deduplicate derived clauses and send to solver
                 for mut clause in derived_clauses {
                     clause.sort_by_key(|lit| lit.inner());
-                    if self.all_clauses.insert(clause.clone()) {
+                    if self.all_new_clauses.insert(clause.clone()) {
                         self.tx_derived_clauses
                             .send(Message::DerivedClause(clause))
                             .expect("Failed to send derived clause");
@@ -186,17 +180,24 @@ impl SearcherActor {
                 continue;
             }
 
-            // Check if any learned clauses have arrived from the solver
-            while let Ok(Message::LearnedClause(learned_clause)) = self.rx_learned_clauses.try_recv() {
-                if self.all_clauses.insert(learned_clause.clone()) {
-                    self.searcher.solver.add_clause(&learned_clause);
+            loop {
+                match self.rx_learned_clauses.try_recv() {
+                    Ok(Message::LearnedClause(learned_clause)) => {
+                        if self.all_new_clauses.insert(learned_clause.clone()) {
+                            self.searcher.solver.add_clause(&learned_clause);
+                        }
+                    }
+                    Ok(Message::DerivedClause(_)) => {
+                        panic!("Unexpected DerivedClause message.");
+                    }
+                    Ok(Message::Terminate) => {
+                        log::info!("Searcher received termination message.");
+                        break 'out;
+                    }
+                    Err(_) => {
+                        break;
+                    }
                 }
-            }
-
-            // Stop searcher if Terminate message is received
-            if let Ok(Message::Terminate) = self.rx_learned_clauses.try_recv() {
-                log::info!("Searcher received termination message.");
-                break;
             }
         }
     }
