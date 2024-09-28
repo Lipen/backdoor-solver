@@ -49,6 +49,10 @@ struct Cli {
     #[arg(long, value_name = "FLOAT")]
     run_timeout: Option<f64>,
 
+    /// Do ban variables used in the best backdoors on previous runs?
+    #[arg(long)]
+    ban_used: bool,
+
     /// Derive ternary clauses.
     #[arg(long)]
     derive_ternary: bool,
@@ -123,10 +127,11 @@ impl SearcherActor {
         let pool = determine_vars_pool(&cli.path_cnf, &cli.allowed_vars, &cli.banned_vars);
         let options = Options {
             seed: cli.seed,
-            ban_used_variables: false,
+            ban_used_variables: cli.ban_used,
             ..DEFAULT_OPTIONS
         };
         let searcher = BackdoorSearcher::new(SatSolver::new_cadical(aux_solver), pool, options);
+
         let mut all_clauses = HashSet::new();
         for clause in parse_dimacs(&cli.path_cnf) {
             all_clauses.insert(clause);
@@ -154,7 +159,7 @@ impl SearcherActor {
                 cli.num_iters,
                 None, // No stagnation limit
                 cli.run_timeout,
-                None,
+                Some(((1u64 << cli.backdoor_size) - 1) as f64 / (1u64 << cli.backdoor_size) as f64),
                 0,
                 None,
             ) {
@@ -173,6 +178,10 @@ impl SearcherActor {
                             .expect("Failed to send derived clause");
                     }
                 }
+            } else {
+                log::info!("Searcher finished without result. Resetting banned variables.");
+                self.searcher.banned_vars.clear();
+                continue;
             }
 
             // Check if any learned clauses have arrived from the solver
@@ -193,23 +202,32 @@ impl SearcherActor {
 
 // Solver Actor, which manages the main SAT solving process
 struct SolverActor {
-    solver: Cadical,
     tx_learned_clauses: Sender<Message>,
     rx_derived_clauses: Receiver<Message>,
+    solver: Cadical,
+    all_clauses: HashSet<Vec<Lit>>,
     conflict_budget: u64,
 }
 
 impl SolverActor {
     fn new(tx_learned_clauses: Sender<Message>, rx_derived_clauses: Receiver<Message>, cli: &Cli) -> Self {
+        let mut all_clauses: HashSet<Vec<Lit>> = HashSet::new();
+        for mut clause in parse_dimacs(&cli.path_cnf) {
+            clause.sort_by_key(|lit| lit.inner());
+            all_clauses.insert(clause);
+        }
+        log::info!("Original clauses: {}", all_clauses.len());
+
         let mut solver = Cadical::new(); // This is the main solver
-        for clause in parse_dimacs(&cli.path_cnf) {
-            solver.add_clause(clause_to_external(&clause));
+        for clause in all_clauses.iter() {
+            solver.add_clause(clause_to_external(clause));
         }
 
         SolverActor {
-            solver,
             tx_learned_clauses,
             rx_derived_clauses,
+            solver,
+            all_clauses,
             conflict_budget: cli.budget_solve,
         }
     }
@@ -218,8 +236,11 @@ impl SolverActor {
         loop {
             // Listen for derived clauses from searchers
             while let Ok(Message::DerivedClause(derived_clause)) = self.rx_derived_clauses.try_recv() {
-                log::info!("Received derived clause: {}", display_slice(&derived_clause));
-                self.solver.add_clause(clause_to_external(&derived_clause));
+                // Note: we assume `derived_clause` is already sorted!
+                if self.all_clauses.insert(derived_clause.clone()) {
+                    log::info!("Received new derived clause: {}", display_slice(&derived_clause));
+                    self.solver.add_clause(clause_to_external(&derived_clause));
+                }
             }
 
             // Set the conflict limit (budget) for this solving trial
@@ -229,17 +250,6 @@ impl SolverActor {
             log::info!("Solving with budget {}...", self.conflict_budget);
             let res = self.solver.solve().unwrap();
             log::info!("Solving done: {:?}", res);
-
-            // Send learned clauses back to searchers
-            for learned_clause in self.solver.all_clauses_iter() {
-                let mut clause = clause_from_external(learned_clause);
-                clause.sort_by_key(|lit| lit.inner());
-                log::info!("Learned clause: {}", display_slice(&clause));
-
-                self.tx_learned_clauses
-                    .send(Message::LearnedClause(clause))
-                    .expect("Failed to send learned clause");
-            }
 
             // If the solver reaches UNSAT or SAT, return the result and terminate
             if matches!(res, SolveResponse::Unsat | SolveResponse::Sat) {
@@ -253,6 +263,19 @@ impl SolverActor {
                 } else {
                     SolveResult::SAT
                 };
+            }
+
+            // Send learned clauses back to searchers
+            for clause in self.solver.all_clauses_iter() {
+                let mut clause = clause_from_external(clause);
+                clause.sort_by_key(|lit| lit.inner());
+
+                if self.all_clauses.insert(clause.clone()) {
+                    // log::info!("Sending new learned clause: {}", display_slice(&clause));
+                    self.tx_learned_clauses
+                        .send(Message::LearnedClause(clause))
+                        .expect("Failed to send learned clause");
+                }
             }
         }
     }
