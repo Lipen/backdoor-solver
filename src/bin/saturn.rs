@@ -157,7 +157,7 @@ impl SearcherActor {
             if let Some(result) = self.searcher.run(
                 cli.backdoor_size,
                 cli.num_iters,
-                None, // No stagnation limit
+                cli.stagnation_limit,
                 cli.run_timeout,
                 Some(((1u64 << cli.backdoor_size) - 1) as f64 / (1u64 << cli.backdoor_size) as f64),
                 0,
