@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use backdoor::utils::parse_dimacs;
+
 use cadical_sys::statik::*;
 use ffi_utils::cstr2str;
 
