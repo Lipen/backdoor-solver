@@ -30,6 +30,19 @@ where
     }
 }
 
+pub fn display_slice<T: Display>(slice: impl AsRef<[T]>) -> String {
+    format!("[{}]", join(slice.as_ref(), ", "))
+}
+
+pub fn display_iter_slices<'a, T, I>(iter: I) -> String
+where
+    T: Display + 'a,
+    I: IntoIterator,
+    I::Item: AsRef<[T]>,
+{
+    format!("[{}]", iter.into_iter().map(|x| display_slice(x)).join(", "))
+}
+
 pub fn get_extension(path: &Path) -> Option<&str> {
     path.extension().and_then(OsStr::to_str)
 }

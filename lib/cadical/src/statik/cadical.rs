@@ -35,6 +35,8 @@ impl Drop for Cadical {
     }
 }
 
+unsafe impl Send for Cadical {}
+
 impl Display for Cadical {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.signature())
