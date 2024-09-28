@@ -165,6 +165,8 @@ impl SearcherActor {
             ) {
                 let backdoor = result.best_instance.get_variables();
                 let hard_tasks = get_hard_tasks(&backdoor, self.searcher.solver.as_cadical());
+                log::debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard_tasks.len());
+                assert_eq!(hard_tasks.len() as u64, result.best_fitness.num_hard);
 
                 // Derive clauses for hard tasks
                 let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
