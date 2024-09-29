@@ -169,6 +169,7 @@ impl SearcherActor {
                 for mut clause in derived_clauses {
                     clause.sort_by_key(|lit| lit.inner());
                     if self.all_new_clauses.insert(clause.clone()) {
+                        log::info!("Sending new derived clause: {}", display_slice(&clause));
                         self.tx_derived_clauses
                             .send(Message::DerivedClause(clause))
                             .expect("Failed to send derived clause");
@@ -180,10 +181,13 @@ impl SearcherActor {
                 continue;
             }
 
+            let mut num_new_learnts = 0;
             loop {
                 match self.rx_learned_clauses.try_recv() {
                     Ok(Message::LearnedClause(learned_clause)) => {
                         if self.all_new_clauses.insert(learned_clause.clone()) {
+                            // log::info!("Received new learned clause: {}", display_slice(&learned_clause));
+                            num_new_learnts += 1;
                             self.searcher.solver.add_clause(&learned_clause);
                         }
                     }
@@ -194,11 +198,17 @@ impl SearcherActor {
                         log::info!("Searcher received termination message.");
                         break 'out;
                     }
-                    Err(_) => {
+                    Err(TryRecvError::Disconnected) => {
+                        log::info!("Solver actor disconnected.");
+                        break 'out;
+                    }
+                    Err(TryRecvError::Empty) => {
+                        // The queue is empty, simply continue
                         break;
                     }
                 }
             }
+            log::info!("Received {} new learned clauses", num_new_learnts);
         }
     }
 }
@@ -249,7 +259,7 @@ impl SolverActor {
             // Set the conflict limit (budget) for this solving trial
             self.solver.limit("conflicts", self.conflict_budget as i32);
 
-            // Try solving with the current budget
+            // Try solving with the conflicts budget
             log::info!("Solving with budget {}...", self.conflict_budget);
             let res = self.solver.solve().unwrap();
             log::info!("Solving done: {:?}", res);
