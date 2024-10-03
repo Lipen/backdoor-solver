@@ -489,7 +489,6 @@ impl SearcherActor {
 
                 let mut remaining_cubes: Vec<usize> = (0..cubes_product.len()).collect();
                 let mut indet_cubes: Vec<usize> = Vec::new();
-                let mut cores: HashSet<Vec<Lit>> = HashSet::new();
 
                 let verb = false;
 
