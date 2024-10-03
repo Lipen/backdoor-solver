@@ -303,11 +303,11 @@ impl SearcherActor {
 
                 if cubes_product.is_empty() {
                     info!("No more cubes to solve");
-                    info!("Just solving with {} conflicts budget...", 10000);
+                    info!("Just solving with {} conflicts budget...", cli.budget_solve);
                     match &self.searcher.solver {
                         SatSolver::Cadical(solver) => {
                             solver.reset_assumptions();
-                            solver.limit("conflicts", 10000);
+                            solver.limit("conflicts", cli.budget_solve as i32);
                             let time_solve = Instant::now();
                             let res = solver.solve().unwrap();
                             let time_solve = time_solve.elapsed();
@@ -610,15 +610,15 @@ impl SearcherActor {
                                                 display_slice(&cubes_product[best_cube])
                                             );
                                         }
-                                        let model = (1..=solver.vars())
-                                            .map(|i| {
-                                                let v = Var::from_external(i as u32);
-                                                match solver.val(i as i32).unwrap() {
-                                                    LitValue::True => Lit::new(v, false),
-                                                    LitValue::False => Lit::new(v, true),
-                                                }
-                                            })
-                                            .collect_vec();
+                                        // let model = (1..=solver.vars())
+                                        //     .map(|i| {
+                                        //         let v = Var::from_external(i as u32);
+                                        //         match solver.val(i as i32).unwrap() {
+                                        //             LitValue::True => Lit::new(v, false),
+                                        //             LitValue::False => Lit::new(v, true),
+                                        //         }
+                                        //     })
+                                        //     .collect_vec();
                                         // final_model = Some(model);
                                         break;
                                     }
