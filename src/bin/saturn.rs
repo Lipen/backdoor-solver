@@ -219,7 +219,7 @@ impl SearcherActor {
                         // log::info!("Sending new derived clause: {}", display_slice(&clause));
                         self.tx_derived_clauses
                             .send(Message::DerivedClause(clause))
-                            .expect("Failed to send derived clause");
+                            .unwrap_or_else(|e| panic!("Failed to send derived clause: {}", e));
                     }
                 }
                 info!("Sent {} new derived clauses", num_new_derived_clauses);
@@ -839,7 +839,7 @@ impl SolverActor {
                 // Send termination message to all searchers
                 self.tx_learned_clauses
                     .send(Message::Terminate)
-                    .expect("Failed to send termination message");
+                    .unwrap_or_else(|e| panic!("Failed to send termination message: {}", e));
                 return if res == SolveResponse::Unsat {
                     SolveResult::UNSAT
                 } else {
@@ -858,7 +858,7 @@ impl SolverActor {
                     // log::info!("Sending new learned clause: {}", display_slice(&clause));
                     self.tx_learned_clauses
                         .send(Message::LearnedClause(clause))
-                        .expect("Failed to send learned clause");
+                        .unwrap_or_else(|e| panic!("Failed to send learned clause: {}", e));
                 }
             }
             info!("Sent {} new learned clauses", num_new_learnts);
