@@ -166,15 +166,18 @@ impl SearcherActor {
                 let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
 
                 // Deduplicate derived clauses and send to solver
+                let mut num_new_derived_clauses = 0;
                 for mut clause in derived_clauses {
                     clause.sort_by_key(|lit| lit.inner());
                     if self.all_new_clauses.insert(clause.clone()) {
-                        log::info!("Sending new derived clause: {}", display_slice(&clause));
+                        num_new_derived_clauses += 1;
+                        // log::info!("Sending new derived clause: {}", display_slice(&clause));
                         self.tx_derived_clauses
                             .send(Message::DerivedClause(clause))
                             .expect("Failed to send derived clause");
                     }
                 }
+                log::info!("Sent {} new derived clauses", num_new_derived_clauses);
             } else {
                 log::info!("Searcher finished without result. Resetting banned variables.");
                 self.searcher.banned_vars.clear();
@@ -248,13 +251,16 @@ impl SolverActor {
     fn run(&mut self) -> SolveResult {
         loop {
             // Listen for derived clauses from searchers
+            let mut num_new_derived_clauses = 0;
             while let Ok(Message::DerivedClause(derived_clause)) = self.rx_derived_clauses.try_recv() {
                 // Note: we assume `derived_clause` is already sorted!
                 if self.all_clauses.insert(derived_clause.clone()) {
-                    log::info!("Received new derived clause: {}", display_slice(&derived_clause));
+                    // log::info!("Received new derived clause: {}", display_slice(&derived_clause));
+                    num_new_derived_clauses += 1;
                     self.solver.add_clause(clause_to_external(&derived_clause));
                 }
             }
+            log::info!("Received {} new derived clauses", num_new_derived_clauses);
 
             // Set the conflict limit (budget) for this solving trial
             self.solver.limit("conflicts", self.conflict_budget as i32);
@@ -279,17 +285,20 @@ impl SolverActor {
             }
 
             // Send learned clauses back to searchers
+            let mut num_new_learnts = 0;
             for clause in self.solver.all_clauses_iter() {
                 let mut clause = clause_from_external(clause);
                 clause.sort_by_key(|lit| lit.inner());
 
                 if self.all_clauses.insert(clause.clone()) {
+                    num_new_learnts += 1;
                     // log::info!("Sending new learned clause: {}", display_slice(&clause));
                     self.tx_learned_clauses
                         .send(Message::LearnedClause(clause))
                         .expect("Failed to send learned clause");
                 }
             }
+            log::info!("Sent {} new learned clauses", num_new_learnts);
         }
     }
 }
