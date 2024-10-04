@@ -684,13 +684,13 @@ impl SearcherActor {
                 match &self.searcher.solver {
                     SatSolver::Cadical(solver) => {
                         debug!("Retrieving clauses from the solver...");
-                        let time_extract = Instant::now();
-                        let mut num_new = 0;
+                        // let time_extract = Instant::now();
+                        // let mut num_new = 0;
                         for clause in solver.all_clauses_iter() {
                             let mut clause = clause_from_external(clause);
                             clause.sort_by_key(|lit| lit.inner());
                             all_new_clauses.insert(clause);
-                            num_new += 1;
+                            // num_new += 1;
                         }
                         // let time_extract = time_extract.elapsed();
                         // total_time_extract += time_extract;
@@ -793,12 +793,12 @@ impl SearcherActor {
                     SatSolver::Cadical(solver) => {
                         debug!("Retrieving clauses from the solver...");
                         // let time_extract = Instant::now();
-                        let mut num_new = 0;
+                        // let mut num_new = 0;
                         for clause in solver.all_clauses_iter() {
                             let mut clause = clause_from_external(clause);
                             clause.sort_by_key(|lit| lit.inner());
                             all_new_clauses.insert(clause);
-                            num_new += 1;
+                            // num_new += 1;
                         }
                         // let time_extract = time_extract.elapsed();
                         // total_time_extract += time_extract;
