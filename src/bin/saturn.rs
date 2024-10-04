@@ -301,6 +301,13 @@ impl SearcherActor {
                 //     writeln!(f, "{},propagate,{}", run_number, cubes_product.len())?;
                 // }
 
+                for &var in backdoor.iter() {
+                    // assert!(searcher.solver.is_active(var), "var {} in backdoor is not active", var);
+                    if !self.searcher.solver.is_active(var) {
+                        log::error!("var {} in backdoor is not active", var);
+                    }
+                }
+
                 if cubes_product.is_empty() {
                     info!("No more cubes to solve");
                     info!("Just solving with {} conflicts budget...", cli.budget_solve);
