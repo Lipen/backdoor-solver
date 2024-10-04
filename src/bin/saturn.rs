@@ -771,6 +771,8 @@ impl SearcherActor {
                                             }
                                         })
                                         .collect_vec();
+                                    info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                                    info!("Model: {}", display_slice(&model));
                                     // final_model = Some(model);
                                     // TODO: break out of the outer loop (currently not possible due to closure in retain)
                                     false
