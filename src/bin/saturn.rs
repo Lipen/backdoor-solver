@@ -59,13 +59,33 @@ struct Cli {
     #[arg(long)]
     ban_used: bool,
 
+    /// Do not derive clauses.
+    #[arg(long)]
+    no_derive: bool,
+
     /// Derive ternary clauses.
     #[arg(long)]
     derive_ternary: bool,
 
+    /// Maximum product size.
+    #[arg(long, value_name = "INT", default_value_t = 100000)]
+    max_product: usize,
+
+    /// Use novel sorted filtering method.
+    #[arg(long)]
+    use_sorted_filtering: bool,
+
     /// Number of conflicts (budget per task in filtering).
     #[arg(long, value_name = "INT", default_value_t = 1000)]
     num_conflicts: usize,
+
+    /// Initial budget (in conflicts) for filtering.
+    #[arg(long, value_name = "INT")]
+    budget_filter: u64,
+
+    /// Multiplicative factor for filtering budget.
+    #[arg(long, value_name = "FLOAT", default_value_t = 1.0)]
+    factor_budget_filter: f64,
 
     /// Initial conflicts budget for solving.
     #[arg(long, value_name = "INT", default_value_t = 10000)]
@@ -157,6 +177,9 @@ impl SearcherActor {
         // All new clauses:
         let mut all_new_clauses: HashSet<Vec<Lit>> = HashSet::new();
 
+        // Budget for filtering:
+        let mut budget_filter = cli.budget_filter;
+
         'out: loop {
             if self.finish.load(Ordering::Acquire) {
                 info!("Finishing searcher.");
@@ -245,22 +268,62 @@ impl SearcherActor {
                     unreachable!();
                 }
 
-                // Derive clauses for hard tasks
-                let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
+                for &var in backdoor.iter() {
+                    // assert!(self.searcher.solver.is_active(var), "var {} in backdoor is not active", var);
+                    if !self.searcher.solver.is_active(var) {
+                        log::error!("var {} in backdoor is not active", var);
+                    }
+                }
 
-                // Deduplicate derived clauses and send to solver
-                let mut num_new_derived_clauses = 0;
-                for mut clause in derived_clauses {
-                    clause.sort_by_key(|lit| lit.inner());
-                    if all_new_clauses.insert(clause.clone()) {
-                        num_new_derived_clauses += 1;
+                // Derive clauses from hard tasks in the backdoor
+                if !cli.no_derive {
+                    info!("Deriving clauses from {} hard tasks in the backdoor...", hard_tasks.len());
+                    let time_derive = Instant::now();
+                    let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
+                    let time_derive = time_derive.elapsed();
+                    info!(
+                        "Derived {} clauses ({} units, {} binary, {} ternary, {} other) for backdoor in {:.1}s",
+                        derived_clauses.len(),
+                        derived_clauses.iter().filter(|c| c.len() == 1).count(),
+                        derived_clauses.iter().filter(|c| c.len() == 2).count(),
+                        derived_clauses.iter().filter(|c| c.len() == 3).count(),
+                        derived_clauses.iter().filter(|c| c.len() > 3).count(),
+                        time_derive.as_secs_f64()
+                    );
+
+                    // Deduplicate derived clauses
+                    let mut new_derived_clauses = Vec::new();
+                    for mut clause in derived_clauses {
+                        clause.sort_by_key(|lit| lit.inner());
+                        if all_new_clauses.insert(clause.clone()) {
+                            new_derived_clauses.push(clause)
+                        }
+                    }
+
+                    debug!("Adding {} new derived clauses to the solver...", new_derived_clauses.len());
+                    for lemma in new_derived_clauses.iter() {
+                        self.searcher.solver.add_clause(lemma);
+                    }
+
+                    // Send new derived clauses to the solver
+                    info!("Sending {} new derived clauses...", new_derived_clauses.len());
+                    for clause in new_derived_clauses {
                         // log::info!("Sending new derived clause: {}", display_slice(&clause));
                         self.tx_derived_clauses
                             .send(Message::DerivedClause(clause))
                             .unwrap_or_else(|e| panic!("Failed to send derived clause: {}", e));
                     }
                 }
-                info!("Sent {} new derived clauses", num_new_derived_clauses);
+
+                // Remove non-active variables from all cubes:
+                cubes_product = cubes_product
+                    .into_iter()
+                    .map(|cube| cube.into_iter().filter(|&lit| self.searcher.solver.is_active(lit.var())).collect())
+                    .collect();
+                let hard_tasks: Vec<Vec<Lit>> = hard_tasks
+                    .into_iter()
+                    .map(|cube| cube.into_iter().filter(|lit| self.searcher.solver.is_active(lit.var())).collect())
+                    .collect();
 
                 info!(
                     "Going to produce a product of size {} * {} = {}",
@@ -339,71 +402,17 @@ impl SearcherActor {
                 //     writeln!(f, "{},propagate,{}", run_number, cubes_product.len())?;
                 // }
 
-                for &var in backdoor.iter() {
-                    // assert!(searcher.solver.is_active(var), "var {} in backdoor is not active", var);
-                    if !self.searcher.solver.is_active(var) {
-                        log::error!("var {} in backdoor is not active", var);
-                    }
+                if cubes_product.is_empty() {
+                    info!("No more cubes left!");
+                    cubes_product = vec![vec![]];
+                    continue 'out;
                 }
 
-                if cubes_product.is_empty() {
-                    info!("No more cubes to solve");
-                    info!("Just solving with {} conflicts budget...", cli.budget_solve);
-                    match &self.searcher.solver {
-                        SatSolver::Cadical(solver) => {
-                            solver.reset_assumptions();
-                            solver.limit("conflicts", cli.budget_solve as i32);
-                            let time_solve = Instant::now();
-                            let res = solver.solve().unwrap();
-                            let time_solve = time_solve.elapsed();
-                            match res {
-                                SolveResponse::Interrupted => {
-                                    info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
-                                    // do nothing
-                                }
-                                SolveResponse::Unsat => {
-                                    info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
-                                    // return Ok(SolveResult::UNSAT);
-                                    break 'out;
-                                }
-                                SolveResponse::Sat => {
-                                    info!("SAT in {:.1} s", time_solve.as_secs_f64());
-                                    // let model = (1..=solver.vars())
-                                    //     .map(|i| {
-                                    //         let v = Var::from_external(i as u32);
-                                    //         match solver.val(i as i32).unwrap() {
-                                    //             LitValue::True => Lit::new(v, false),
-                                    //             LitValue::False => Lit::new(v, true),
-                                    //         }
-                                    //     })
-                                    //     .collect_vec();
-                                    // return Ok(SolveResult::SAT(model));
-                                    break 'out;
-                                }
-                            }
-                            solver.internal_backtrack(0);
-                        }
-                    }
-                    unreachable!()
-                }
-                if cubes_product.len() == 1 {
-                    debug!("Adding {} units to the solver", cubes_product[0].len());
-                    for &lit in &cubes_product[0] {
-                        if all_new_clauses.insert(vec![lit]) {
-                            // if let Some(f) = &mut file_derived_clauses {
-                            //     write_clause(f, &[lit])?;
-                            // }
-                            self.searcher.solver.add_clause(&[lit]);
-                            // all_derived_clauses.push(vec![lit]);
-                        }
-                    }
-                    cubes_product = vec![vec![]];
-                    continue;
-                }
+                // TODO: handle units?
 
                 // Derivation after trie-filtering:
-                {
-                    info!("Deriving clauses for {} cubes...", cubes_product.len());
+                if !cli.no_derive {
+                    info!("Deriving clauses from {} cubes...", cubes_product.len());
                     let time_derive = Instant::now();
                     let derived_clauses = derive_clauses(&cubes_product, cli.derive_ternary);
                     let time_derive = time_derive.elapsed();
@@ -413,7 +422,7 @@ impl SearcherActor {
                         derived_clauses.iter().filter(|c| c.len() == 1).count(),
                         derived_clauses.iter().filter(|c| c.len() == 2).count(),
                         derived_clauses.iter().filter(|c| c.len() == 3).count(),
-                        derived_clauses.iter().filter(|c| c.len() > 2).count(),
+                        derived_clauses.iter().filter(|c| c.len() > 3).count(),
                         cubes_product.len(),
                         time_derive.as_secs_f64()
                     );
@@ -441,11 +450,18 @@ impl SearcherActor {
                     debug!("[{}]", new_clauses.iter().map(|c| display_slice(c)).join(", "));
 
                     debug!("Adding {} new derived clauses to the solver...", new_clauses.len());
-                    for lemma in new_clauses {
-                        self.searcher.solver.add_clause(&lemma);
+                    for lemma in new_clauses.iter() {
+                        self.searcher.solver.add_clause(lemma);
                     }
 
-                    //     debug!(
+                    info!("Sending {} new derived clauses...", new_clauses.len());
+                    for lemma in new_clauses {
+                        self.tx_derived_clauses
+                            .send(Message::DerivedClause(lemma))
+                            .unwrap_or_else(|e| panic!("Failed to send derived clause: {}", e));
+                    }
+
+                    // debug!(
                     //     "So far derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
                     //     all_derived_clauses.len(),
                     //     all_derived_clauses.iter().filter(|c| c.len() == 1).count(),
@@ -455,15 +471,14 @@ impl SearcherActor {
                     // );
                 }
 
-                if cubes_product.len() > 100_000 {
+                if cubes_product.len() > cli.max_product {
                     info!(
                         "Too many cubes in the product ({} > {}), restarting",
                         cubes_product.len(),
-                        // args.max_product
-                        100_000
+                        cli.max_product
                     );
                     cubes_product = vec![vec![]];
-                    continue;
+                    continue 'out;
                 }
             } else {
                 info!("Searcher finished without result. Resetting banned variables.");
@@ -483,13 +498,11 @@ impl SearcherActor {
             let num_conflicts = match &self.searcher.solver {
                 SatSolver::Cadical(solver) => solver.conflicts() as u64,
             };
-            let budget_filter = 100_000;
             info!("conflicts budget: {}", budget_filter);
             let num_conflicts_limit = num_conflicts + budget_filter;
             let mut in_budget = true;
 
-            let use_sorted_filtering = true;
-            if use_sorted_filtering {
+            if cli.use_sorted_filtering {
                 debug!("Computing neighbors...");
                 let time_compute_neighbors = Instant::now();
                 let mut neighbors: HashMap<(Lit, Lit), Vec<usize>> = HashMap::new();
@@ -821,6 +834,78 @@ impl SearcherActor {
             // if let Some(f) = &mut file_results {
             //     writeln!(f, "{},limited,{}", run_number, cubes_product.len())?;
             // }
+
+            // Update the budget for filtering:
+            budget_filter = (budget_filter as f64 * cli.factor_budget_filter) as u64;
+
+            if cubes_product.is_empty() {
+                info!("No more cubes left!");
+                cubes_product = vec![vec![]];
+                continue 'out;
+            }
+
+            // Derivation after filtering:
+            if !cli.no_derive {
+                info!("Deriving clauses from {} cubes...", cubes_product.len());
+                let time_derive = Instant::now();
+                let derived_clauses = derive_clauses(&cubes_product, cli.derive_ternary);
+                let time_derive = time_derive.elapsed();
+                info!(
+                    "Derived {} clauses ({} units, {} binary, {} ternary, {} other) for {} cubes in {:.1}s",
+                    derived_clauses.len(),
+                    derived_clauses.iter().filter(|c| c.len() == 1).count(),
+                    derived_clauses.iter().filter(|c| c.len() == 2).count(),
+                    derived_clauses.iter().filter(|c| c.len() == 3).count(),
+                    derived_clauses.iter().filter(|c| c.len() > 3).count(),
+                    cubes_product.len(),
+                    time_derive.as_secs_f64()
+                );
+                // debug!("[{}]", derived_clauses.iter().map(|c| display_slice(c)).join(", "));
+
+                let mut new_clauses: Vec<Vec<Lit>> = Vec::new();
+                for mut lemma in derived_clauses {
+                    lemma.sort_by_key(|lit| lit.inner());
+                    if all_new_clauses.insert(lemma.clone()) {
+                        // if let Some(f) = &mut file_derived_clauses {
+                        //     write_clause(f, &lemma)?;
+                        // }
+                        new_clauses.push(lemma.clone());
+                        // all_derived_clauses.push(lemma);
+                    }
+                }
+                info!(
+                    "Derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
+                    new_clauses.len(),
+                    new_clauses.iter().filter(|c| c.len() == 1).count(),
+                    new_clauses.iter().filter(|c| c.len() == 2).count(),
+                    new_clauses.iter().filter(|c| c.len() == 3).count(),
+                    new_clauses.iter().filter(|c| c.len() > 2).count()
+                );
+                debug!("[{}]", new_clauses.iter().map(|c| display_slice(c)).join(", "));
+
+                debug!("Adding {} new derived clauses to the solver...", new_clauses.len());
+                for lemma in new_clauses.iter() {
+                    self.searcher.solver.add_clause(lemma);
+                }
+
+                info!("Sending {} new derived clauses...", new_clauses.len());
+                for lemma in new_clauses {
+                    self.tx_derived_clauses
+                        .send(Message::DerivedClause(lemma))
+                        .unwrap_or_else(|e| panic!("Failed to send derived clause: {}", e));
+                }
+
+                // debug!(
+                //     "So far derived {} new clauses ({} units, {} binary, {} ternary, {} other)",
+                //     all_derived_clauses.len(),
+                //     all_derived_clauses.iter().filter(|c| c.len() == 1).count(),
+                //     all_derived_clauses.iter().filter(|c| c.len() == 2).count(),
+                //     all_derived_clauses.iter().filter(|c| c.len() == 3).count(),
+                //     all_derived_clauses.iter().filter(|c| c.len() > 2).count()
+                // );
+            }
+
+            // done
         }
     }
 }
@@ -940,7 +1025,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     finish.store(true, Ordering::Release);
 
     // Wait for the searcher to finish (after termination message is sent)
-    searcher_thread.join().unwrap();
+    // searcher_thread.join().unwrap();
 
     Ok(result) // Return the result from the solver actor
 }
