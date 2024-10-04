@@ -207,6 +207,44 @@ impl SearcherActor {
                 debug!("Backdoor {} has {} hard tasks", display_slice(&backdoor), hard_tasks.len());
                 assert_eq!(hard_tasks.len() as u64, result.best_fitness.num_hard);
 
+                if hard_tasks.is_empty() {
+                    info!("Found strong backdoor: {}", display_slice(&backdoor));
+                    info!("Just solving...");
+                    match &mut self.searcher.solver {
+                        SatSolver::Cadical(solver) => {
+                            // solver.reset_assumptions();
+                            let time_solve = Instant::now();
+                            let res = solver.solve().unwrap();
+                            let time_solve = time_solve.elapsed();
+                            match res {
+                                SolveResponse::Interrupted => {
+                                    info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+                                    // do nothing
+                                }
+                                SolveResponse::Unsat => {
+                                    info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+                                    break 'out;
+                                }
+                                SolveResponse::Sat => {
+                                    info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                                    let model = (1..=solver.vars())
+                                        .map(|i| {
+                                            let v = Var::from_external(i as u32);
+                                            match solver.val(i as i32).unwrap() {
+                                                LitValue::True => Lit::new(v, false),
+                                                LitValue::False => Lit::new(v, true),
+                                            }
+                                        })
+                                        .collect_vec();
+                                    info!("Model: {}", display_slice(&model));
+                                    break 'out;
+                                }
+                            }
+                        }
+                    }
+                    unreachable!();
+                }
+
                 // Derive clauses for hard tasks
                 let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
 
