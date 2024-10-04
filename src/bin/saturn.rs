@@ -841,7 +841,7 @@ impl SolverActor {
         }
         info!("Original clauses: {}", all_clauses.len());
 
-        let mut solver = Cadical::new(); // This is the main solver
+        let solver = Cadical::new(); // This is the main solver
         for clause in all_clauses.iter() {
             solver.add_clause(clause_to_external(clause));
         }
