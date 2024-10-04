@@ -906,7 +906,7 @@ fn main() -> color_eyre::Result<()> {
     let cli = Cli::parse();
 
     // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug,backdoor::derivation=info")).init();
     let start_time = Instant::now();
 
     // Run the solver
