@@ -30,17 +30,18 @@ where
     }
 }
 
-pub fn display_slice<'a, T: 'a>(slice: &'a [T]) -> String
+pub fn display_slice<T>(slice: impl AsRef<[T]>) -> String
 where
-    &'a T: Display,
+    for<'a> &'a T: Display,
 {
-    format!("[{}]", join(slice, ", "))
+    format!("[{}]", join(slice.as_ref(), ", "))
 }
 
-pub fn display_iter_slices<'a, T: 'a, I>(iter: I) -> String
+pub fn display_iter_slices<T, I>(iter: I) -> String
 where
-    &'a T: Display,
-    I: IntoIterator<Item = &'a [T]>,
+    for<'a> &'a T: Display,
+    I: IntoIterator,
+    I::Item: AsRef<[T]>,
 {
     format!("[{}]", iter.into_iter().map(|x| display_slice(x)).join(", "))
 }
