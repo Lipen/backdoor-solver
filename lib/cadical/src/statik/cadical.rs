@@ -536,6 +536,7 @@ impl Cadical {
             trace!("Backtracking from level {} to 0", self.internal_level());
             self.internal_backtrack(0);
         }
+        assert_eq!(self.internal_level(), 0);
 
         // Propagate everything that needs to be propagated:
         if !self.internal_propagate() {
@@ -544,9 +545,16 @@ impl Cadical {
             return 0;
         }
 
-        // Freeze variables:
+        // Ensure that all variables are active:
         for &v in vars.iter() {
-            self.freeze(v).unwrap()
+            assert!(self.is_active(v), "Variable {} is not active", v);
+        }
+
+        // Freeze all variables:
+        let mut frozen = vec![];
+        for &v in vars.iter() {
+            self.freeze(v).unwrap();
+            frozen.push(v);
         }
 
         let mut cube = vec![-1; vars.len()];
@@ -677,9 +685,10 @@ impl Cadical {
 
         // Post-backtrack to zero level:
         self.internal_backtrack(0);
+        assert_eq!(self.internal_level(), 0);
 
-        // Melt variables:
-        for &v in vars.iter() {
+        // Melt frozen variables:
+        for &v in frozen.iter() {
             self.melt(v).unwrap()
         }
 
