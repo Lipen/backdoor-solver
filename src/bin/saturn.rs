@@ -24,7 +24,7 @@ use log::{debug, info};
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "SAT Solver with Backdoor Search")]
 struct Cli {
     /// Input file with CNF in DIMACS format.
@@ -94,6 +94,10 @@ struct Cli {
     /// Multiplicative factor for solving budget.
     #[arg(long, value_name = "FLOAT", default_value_t = 1.0)]
     factor_budget_solve: f64,
+
+    /// Budget (in conflicts) for pre-solve.
+    #[arg(long, value_name = "INT", default_value_t = 0)]
+    budget_presolve: u64,
 
     /// Path to a file with proof.
     #[arg(long = "proof", value_name = "FILE")]
@@ -179,6 +183,45 @@ impl SearcherActor {
 
         // Budget for filtering:
         let mut budget_filter = cli.budget_filter;
+
+        if cli.budget_presolve > 0 {
+            info!("Pre-solving with {} conflicts budget...", cli.budget_presolve);
+            match &self.searcher.solver {
+                SatSolver::Cadical(solver) => {
+                    solver.limit("conflicts", cli.budget_presolve as i32);
+                    let time_solve = Instant::now();
+                    let res = solver.solve().unwrap();
+                    let time_solve = time_solve.elapsed();
+                    match res {
+                        SolveResponse::Interrupted => {
+                            info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+                            // do nothing
+                        }
+                        SolveResponse::Unsat => {
+                            info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+                            // return Ok(SolveResult::UNSAT);
+                            return;
+                        }
+                        SolveResponse::Sat => {
+                            info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                            let model = (1..=solver.vars())
+                                .map(|i| {
+                                    let v = Var::from_external(i as u32);
+                                    match solver.val(i as i32).unwrap() {
+                                        LitValue::True => Lit::new(v, false),
+                                        LitValue::False => Lit::new(v, true),
+                                    }
+                                })
+                                .collect_vec();
+                            info!("Model: {}", display_slice(&model));
+                            // return Ok(SolveResult::SAT(model));
+                            return;
+                        }
+                    }
+                    solver.internal_backtrack(0);
+                }
+            }
+        }
 
         'out: loop {
             if self.finish.load(Ordering::Acquire) {
@@ -942,7 +985,40 @@ impl SolverActor {
         }
     }
 
-    fn run(&mut self) -> SolveResult {
+    fn run(&mut self, cli: &Cli) -> SolveResult {
+        if cli.budget_presolve > 0 {
+            info!("Pre-solving with {} conflicts budget...", cli.budget_presolve);
+            self.solver.limit("conflicts", cli.budget_presolve as i32);
+            let time_solve = Instant::now();
+            let res = self.solver.solve().unwrap();
+            let time_solve = time_solve.elapsed();
+            match res {
+                SolveResponse::Interrupted => {
+                    info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+                    // do nothing
+                }
+                SolveResponse::Unsat => {
+                    info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+                    return SolveResult::UNSAT;
+                }
+                SolveResponse::Sat => {
+                    info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                    let model = (1..=self.solver.vars())
+                        .map(|i| {
+                            let v = Var::from_external(i as u32);
+                            match self.solver.val(i as i32).unwrap() {
+                                LitValue::True => Lit::new(v, false),
+                                LitValue::False => Lit::new(v, true),
+                            }
+                        })
+                        .collect_vec();
+                    info!("Model: {}", display_slice(&model));
+                    return SolveResult::SAT;
+                }
+            }
+            self.solver.internal_backtrack(0);
+        }
+
         loop {
             // Listen for derived clauses from searchers
             let mut num_new_derived_clauses = 0;
@@ -1010,6 +1086,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
 
     // Spawn a searcher actor in its own thread
     let searcher_thread = {
+        let cli = cli.clone();
         let finish = Arc::clone(&finish);
         thread::spawn(move || {
             let mut searcher_actor = SearcherActor::new(tx_derived_clauses, rx_learned_clauses, &cli, finish);
@@ -1018,7 +1095,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     };
 
     // Run the solver actor in the main thread
-    let result = solver_actor.run();
+    let result = solver_actor.run(&cli);
 
     // Send termination message to the searcher
     info!("Storing `true` in finish flag.");
