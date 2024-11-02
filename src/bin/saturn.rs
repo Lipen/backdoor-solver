@@ -742,7 +742,7 @@ impl SearcherActor {
                         debug!("Retrieving clauses from the solver...");
                         // let time_extract = Instant::now();
                         // let mut num_new = 0;
-                        for clause in solver.all_clauses_iter() {
+                        for clause in solver.extract_clauses(true) {
                             let mut clause = clause_from_external(clause);
                             clause.sort_by_key(|lit| lit.inner());
                             all_new_clauses.insert(clause);
@@ -850,7 +850,7 @@ impl SearcherActor {
                         debug!("Retrieving clauses from the solver...");
                         // let time_extract = Instant::now();
                         // let mut num_new = 0;
-                        for clause in solver.all_clauses_iter() {
+                        for clause in solver.extract_clauses(true) {
                             let mut clause = clause_from_external(clause);
                             clause.sort_by_key(|lit| lit.inner());
                             all_new_clauses.insert(clause);
@@ -1056,7 +1056,7 @@ impl SolverActor {
 
             // Send learned clauses back to searchers
             let mut num_new_learnts = 0;
-            for clause in self.solver.all_clauses_iter() {
+            for clause in self.solver.extract_clauses(true) {
                 let mut clause = clause_from_external(clause);
                 clause.sort_by_key(|lit| lit.inner());
 

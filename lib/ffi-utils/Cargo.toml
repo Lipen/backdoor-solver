@@ -1,5 +1,0 @@
-[package]
-name = "ffi-utils"
-version = "0.1.0"
-authors = ["Konstantin Chukharev <lipen00@gmail.com>"]
-edition = "2021"

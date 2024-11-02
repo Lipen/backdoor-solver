@@ -136,28 +136,30 @@ fn print_stats(solver: &Cadical, prefix: &str) {
             })
             .count()
     );
-    debug!("{}clauses: {}", prefix, solver.clauses_iter().count());
-    debug!("{}units: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 1).count());
-    debug!("{}binary: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 2).count());
-    debug!("{}ternary: {}", prefix, solver.clauses_iter().filter(|c| c.len() == 3).count());
-    debug!("{}large: {}", prefix, solver.clauses_iter().filter(|c| c.len() > 3).count());
-    debug!("{}all_clauses: {}", prefix, solver.all_clauses_iter().count());
+    let solver_clauses = solver.extract_clauses(false);
+    debug!("{}clauses: {}", prefix, solver_clauses.len());
+    debug!("{}units: {}", prefix, solver_clauses.iter().filter(|c| c.len() == 1).count());
+    debug!("{}binary: {}", prefix, solver_clauses.iter().filter(|c| c.len() == 2).count());
+    debug!("{}ternary: {}", prefix, solver_clauses.iter().filter(|c| c.len() == 3).count());
+    debug!("{}large: {}", prefix, solver_clauses.iter().filter(|c| c.len() > 3).count());
+    let solver_all_clauses = solver.extract_clauses(true);
+    debug!("{}all_clauses: {}", prefix, solver_all_clauses.len());
     debug!(
         "{}all_units: {}",
         prefix,
-        solver.all_clauses_iter().filter(|c| c.len() == 1).count()
+        solver_all_clauses.iter().filter(|c| c.len() == 1).count()
     );
     debug!(
         "{}all_binary: {}",
         prefix,
-        solver.all_clauses_iter().filter(|c| c.len() == 2).count()
+        solver_all_clauses.iter().filter(|c| c.len() == 2).count()
     );
     debug!(
         "{}all_ternary: {}",
         prefix,
-        solver.all_clauses_iter().filter(|c| c.len() == 3).count()
+        solver_all_clauses.iter().filter(|c| c.len() == 3).count()
     );
-    debug!("{}all_large: {}", prefix, solver.all_clauses_iter().filter(|c| c.len() > 3).count());
+    debug!("{}all_large: {}", prefix, solver_all_clauses.iter().filter(|c| c.len() > 3).count());
     debug!("{}conflicts: {}", prefix, solver.conflicts());
     debug!("{}decisions: {}", prefix, solver.decisions());
     debug!("{}restarts: {}", prefix, solver.restarts());
