@@ -142,13 +142,14 @@ enum Message {
 struct SearcherActor {
     tx_derived_clauses: Sender<Message>,
     rx_learned_clauses: Receiver<Message>,
+    cli: Cli,
     searcher: BackdoorSearcher,
     finish: Arc<AtomicBool>,
 }
 
 impl SearcherActor {
-    fn new(tx_derived_clauses: Sender<Message>, rx_learned_clauses: Receiver<Message>, cli: &Cli, finish: Arc<AtomicBool>) -> Self {
-        let solver = Cadical::new(); // This solver is for propagation only
+    fn new(tx_derived_clauses: Sender<Message>, rx_learned_clauses: Receiver<Message>, cli: Cli, finish: Arc<AtomicBool>) -> Self {
+        let solver = Cadical::new();
         for clause in parse_dimacs(&cli.path_cnf) {
             solver.add_clause(clause_to_external(&clause));
         }
@@ -163,12 +164,13 @@ impl SearcherActor {
         SearcherActor {
             tx_derived_clauses,
             rx_learned_clauses,
+            cli,
             searcher,
             finish,
         }
     }
 
-    fn run(&mut self, cli: &Cli) {
+    fn run(&mut self) {
         // // Create and open the file with results:
         // let mut file_results = Some(create_line_writer("results.csv"));
         // if let Some(f) = &mut file_results {
@@ -182,13 +184,13 @@ impl SearcherActor {
         let mut all_new_clauses: HashSet<Vec<Lit>> = HashSet::new();
 
         // Budget for filtering:
-        let mut budget_filter = cli.budget_filter;
+        let mut budget_filter = self.cli.budget_filter;
 
-        if cli.budget_presolve > 0 {
-            info!("Pre-solving with {} conflicts budget...", cli.budget_presolve);
+        if self.cli.budget_presolve > 0 {
+            info!("Pre-solving with {} conflicts budget...", self.cli.budget_presolve);
             match &self.searcher.solver {
                 SatSolver::Cadical(solver) => {
-                    solver.limit("conflicts", cli.budget_presolve as i32);
+                    solver.limit("conflicts", self.cli.budget_presolve as i32);
                     let time_solve = Instant::now();
                     let res = solver.solve().unwrap();
                     let time_solve = time_solve.elapsed();
@@ -260,11 +262,11 @@ impl SearcherActor {
 
             // Perform backdoor search and derive clauses
             if let Some(result) = self.searcher.run(
-                cli.backdoor_size,
-                cli.num_iters,
-                cli.stagnation_limit,
-                cli.run_timeout,
-                Some(((1u64 << cli.backdoor_size) - 1) as f64 / (1u64 << cli.backdoor_size) as f64),
+                self.cli.backdoor_size,
+                self.cli.num_iters,
+                self.cli.stagnation_limit,
+                self.cli.run_timeout,
+                Some(((1u64 << self.cli.backdoor_size) - 1) as f64 / (1u64 << self.cli.backdoor_size) as f64),
                 0,
                 None,
             ) {
@@ -319,10 +321,10 @@ impl SearcherActor {
                 }
 
                 // Derive clauses from hard tasks in the backdoor
-                if !cli.no_derive {
+                if !self.cli.no_derive {
                     info!("Deriving clauses from {} hard tasks in the backdoor...", hard_tasks.len());
                     let time_derive = Instant::now();
-                    let derived_clauses = derive_clauses(&hard_tasks, cli.derive_ternary);
+                    let derived_clauses = derive_clauses(&hard_tasks, self.cli.derive_ternary);
                     let time_derive = time_derive.elapsed();
                     info!(
                         "Derived {} clauses ({} units, {} binary, {} ternary, {} other) for backdoor in {:.1}s",
@@ -454,10 +456,10 @@ impl SearcherActor {
                 // TODO: handle units?
 
                 // Derivation after trie-filtering:
-                if !cli.no_derive {
+                if !self.cli.no_derive {
                     info!("Deriving clauses from {} cubes...", cubes_product.len());
                     let time_derive = Instant::now();
-                    let derived_clauses = derive_clauses(&cubes_product, cli.derive_ternary);
+                    let derived_clauses = derive_clauses(&cubes_product, self.cli.derive_ternary);
                     let time_derive = time_derive.elapsed();
                     info!(
                         "Derived {} clauses ({} units, {} binary, {} ternary, {} other) for {} cubes in {:.1}s",
@@ -514,11 +516,11 @@ impl SearcherActor {
                     // );
                 }
 
-                if cubes_product.len() > cli.max_product {
+                if cubes_product.len() > self.cli.max_product {
                     info!(
                         "Too many cubes in the product ({} > {}), restarting",
                         cubes_product.len(),
-                        cli.max_product
+                        self.cli.max_product
                     );
                     cubes_product = vec![vec![]];
                     continue 'out;
@@ -545,7 +547,7 @@ impl SearcherActor {
             let num_conflicts_limit = num_conflicts + budget_filter;
             let mut in_budget = true;
 
-            if cli.use_sorted_filtering {
+            if self.cli.use_sorted_filtering {
                 debug!("Computing neighbors...");
                 let time_compute_neighbors = Instant::now();
                 let mut neighbors: HashMap<(Lit, Lit), Vec<usize>> = HashMap::new();
@@ -636,7 +638,7 @@ impl SearcherActor {
                                 for &lit in cubes_product[best_cube].iter() {
                                     solver.assume(lit.to_external()).unwrap();
                                 }
-                                solver.limit("conflicts", cli.num_conflicts as i32);
+                                solver.limit("conflicts", self.cli.num_conflicts as i32);
                                 // debug!("Solving {}...", display_slice(&best_cube));
                                 let time_solve = Instant::now();
                                 let res = solver.solve().unwrap();
@@ -809,7 +811,7 @@ impl SearcherActor {
                             for &lit in cube.iter() {
                                 solver.assume(lit.to_external()).unwrap();
                             }
-                            solver.limit("conflicts", cli.num_conflicts as i32);
+                            solver.limit("conflicts", self.cli.num_conflicts as i32);
                             let time_solve = Instant::now();
                             let res = solver.solve().unwrap();
                             let time_solve = time_solve.elapsed();
@@ -879,7 +881,7 @@ impl SearcherActor {
             // }
 
             // Update the budget for filtering:
-            budget_filter = (budget_filter as f64 * cli.factor_budget_filter) as u64;
+            budget_filter = (budget_filter as f64 * self.cli.factor_budget_filter) as u64;
 
             if cubes_product.is_empty() {
                 info!("No more cubes left!");
@@ -888,10 +890,10 @@ impl SearcherActor {
             }
 
             // Derivation after filtering:
-            if !cli.no_derive {
+            if !self.cli.no_derive {
                 info!("Deriving clauses from {} cubes...", cubes_product.len());
                 let time_derive = Instant::now();
-                let derived_clauses = derive_clauses(&cubes_product, cli.derive_ternary);
+                let derived_clauses = derive_clauses(&cubes_product, self.cli.derive_ternary);
                 let time_derive = time_derive.elapsed();
                 info!(
                     "Derived {} clauses ({} units, {} binary, {} ternary, {} other) for {} cubes in {:.1}s",
@@ -957,13 +959,13 @@ impl SearcherActor {
 struct SolverActor {
     tx_learned_clauses: Sender<Message>,
     rx_derived_clauses: Receiver<Message>,
+    cli: Cli,
     solver: Cadical,
     all_clauses: HashSet<Vec<Lit>>,
-    conflict_budget: u64,
 }
 
 impl SolverActor {
-    fn new(tx_learned_clauses: Sender<Message>, rx_derived_clauses: Receiver<Message>, cli: &Cli) -> Self {
+    fn new(tx_learned_clauses: Sender<Message>, rx_derived_clauses: Receiver<Message>, cli: Cli) -> Self {
         let mut all_clauses: HashSet<Vec<Lit>> = HashSet::new();
         for mut clause in parse_dimacs(&cli.path_cnf) {
             clause.sort_by_key(|lit| lit.inner());
@@ -971,7 +973,18 @@ impl SolverActor {
         }
         info!("Original clauses: {}", all_clauses.len());
 
-        let solver = Cadical::new(); // This is the main solver
+        let solver = Cadical::new();
+        // Set Cadical options:
+        if let Some(s) = &cli.cadical_options {
+            for part in s.split(",") {
+                let parts: Vec<&str> = part.splitn(2, '=').collect();
+                let key = parts[0];
+                let value = parts[1].parse().unwrap();
+                info!("Cadical option: {}={}", key, value);
+                solver.set_option(key, value);
+            }
+        }
+        // Add all original clauses to the solver:
         for clause in all_clauses.iter() {
             solver.add_clause(clause_to_external(clause));
         }
@@ -979,16 +992,30 @@ impl SolverActor {
         SolverActor {
             tx_learned_clauses,
             rx_derived_clauses,
+            cli,
             solver,
             all_clauses,
-            conflict_budget: cli.budget_solve,
         }
     }
 
-    fn run(&mut self, cli: &Cli) -> SolveResult {
-        if cli.budget_presolve > 0 {
-            info!("Pre-solving with {} conflicts budget...", cli.budget_presolve);
-            self.solver.limit("conflicts", cli.budget_presolve as i32);
+    fn run(&mut self) -> SolveResult {
+        let mut num_learnts_cb = 0;
+        self.solver.set_learn(10, |clause| {
+            let mut clause = clause_from_external(clause);
+            clause.sort_by_key(|lit| lit.inner());
+
+            if self.all_clauses.insert(clause.clone()) {
+                // info!("New learned clause: {}", display_slice(&clause));
+                self.tx_learned_clauses
+                    .send(Message::LearnedClause(clause))
+                    .unwrap_or_else(|e| panic!("Failed to send learned clause: {}", e));
+                num_learnts_cb += 1;
+            }
+        });
+
+        if self.cli.budget_presolve > 0 {
+            info!("Pre-solving with {} conflicts budget...", self.cli.budget_presolve);
+            self.solver.limit("conflicts", self.cli.budget_presolve as i32);
             let time_solve = Instant::now();
             let res = self.solver.solve().unwrap();
             let time_solve = time_solve.elapsed();
@@ -1032,11 +1059,13 @@ impl SolverActor {
             }
             info!("Received {} new derived clauses", num_new_derived_clauses);
 
+            info!("num_learnts_cb = {}", num_learnts_cb);
+
             // Set the conflict limit (budget) for this solving trial
-            self.solver.limit("conflicts", self.conflict_budget as i32);
+            self.solver.limit("conflicts", self.cli.budget_solve as i32);
 
             // Try solving with the conflicts budget
-            info!("Solving with budget {}...", self.conflict_budget);
+            info!("Solving with budget {}...", self.cli.budget_solve);
             let res = self.solver.solve().unwrap();
             info!("Solving done: {:?}", res);
 
@@ -1054,21 +1083,21 @@ impl SolverActor {
                 };
             }
 
-            // Send learned clauses back to searchers
-            let mut num_new_learnts = 0;
-            for clause in self.solver.extract_clauses(true) {
-                let mut clause = clause_from_external(clause);
-                clause.sort_by_key(|lit| lit.inner());
-
-                if self.all_clauses.insert(clause.clone()) {
-                    num_new_learnts += 1;
-                    // log::info!("Sending new learned clause: {}", display_slice(&clause));
-                    self.tx_learned_clauses
-                        .send(Message::LearnedClause(clause))
-                        .unwrap_or_else(|e| panic!("Failed to send learned clause: {}", e));
-                }
-            }
-            info!("Sent {} new learned clauses", num_new_learnts);
+            // // Send learned clauses back to searchers
+            // let mut num_new_learnts = 0;
+            // for clause in self.solver.extract_clauses(true) {
+            //     let mut clause = clause_from_external(clause);
+            //     clause.sort_by_key(|lit| lit.inner());
+            //
+            //     if self.all_clauses.insert(clause.clone()) {
+            //         num_new_learnts += 1;
+            //         info!("Sending new learned clause: {}", display_slice(&clause));
+            //         self.tx_learned_clauses
+            //             .send(Message::LearnedClause(clause))
+            //             .unwrap_or_else(|e| panic!("Failed to send learned clause: {}", e));
+            //     }
+            // }
+            // info!("Sent {} new learned clauses", num_new_learnts);
         }
     }
 }
@@ -1080,7 +1109,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     let (tx_learned_clauses, rx_learned_clauses) = mpsc::channel();
 
     // Create the solver actor
-    let mut solver_actor = SolverActor::new(tx_learned_clauses.clone(), rx_derived_clauses, &cli);
+    let mut solver_actor = SolverActor::new(tx_learned_clauses.clone(), rx_derived_clauses, cli.clone());
 
     let finish = Arc::new(AtomicBool::new(false));
 
@@ -1089,20 +1118,22 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
         let cli = cli.clone();
         let finish = Arc::clone(&finish);
         thread::spawn(move || {
-            let mut searcher_actor = SearcherActor::new(tx_derived_clauses, rx_learned_clauses, &cli, finish);
-            searcher_actor.run(&cli);
+            let mut searcher_actor = SearcherActor::new(tx_derived_clauses, rx_learned_clauses, cli, finish);
+            searcher_actor.run();
         })
     };
 
     // Run the solver actor in the main thread
-    let result = solver_actor.run(&cli);
+    let result = solver_actor.run();
 
     // Send termination message to the searcher
     info!("Storing `true` in finish flag.");
     finish.store(true, Ordering::Release);
 
     // Wait for the searcher to finish (after termination message is sent)
-    // searcher_thread.join().unwrap();
+    if false {
+        searcher_thread.join().unwrap();
+    }
 
     Ok(result) // Return the result from the solver actor
 }
