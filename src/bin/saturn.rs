@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
-use std::time::Instant;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 use std::{process, thread};
 
 use backdoor::derivation::derive_clauses;
@@ -38,6 +39,10 @@ struct Cli {
     /// Random seed.
     #[arg(long, value_name = "INT", default_value_t = 42)]
     seed: u64,
+
+    /// Number of derivers.
+    #[arg(short = 't', value_name = "INT", default_value_t = 1)]
+    num_derivers: usize,
 
     /// Backdoor size.
     #[arg(long, value_name = "INT")]
@@ -132,6 +137,7 @@ enum SolveResult {
 }
 
 // Messages for communication between actors
+#[derive(Debug, Clone)]
 enum Message {
     DerivedClause(Vec<Lit>),
     LearnedClause(Vec<Lit>),
@@ -148,14 +154,20 @@ struct SearcherActor {
 }
 
 impl SearcherActor {
-    fn new(tx_derived_clauses: Sender<Message>, rx_learned_clauses: Receiver<Message>, cli: Cli, finish: Arc<AtomicBool>) -> Self {
+    fn new(
+        tx_derived_clauses: Sender<Message>,
+        rx_learned_clauses: Receiver<Message>,
+        cli: Cli,
+        finish: Arc<AtomicBool>,
+        seed: u64,
+    ) -> Self {
         let solver = Cadical::new();
         for clause in parse_dimacs(&cli.path_cnf) {
             solver.add_clause(clause_to_external(&clause));
         }
         let pool = determine_vars_pool(&cli.path_cnf, &cli.allowed_vars, &cli.banned_vars);
         let options = Options {
-            seed: cli.seed,
+            seed,
             ban_used_variables: cli.ban_used,
             ..DEFAULT_OPTIONS
         };
@@ -999,7 +1011,7 @@ impl SolverActor {
     }
 
     fn run(&mut self) -> SolveResult {
-        let mut num_learnts_cb = 0;
+        let mut num_learnts_via_callback = 0;
         self.solver.set_learn(10, |clause| {
             let mut clause = clause_from_external(clause);
             clause.sort_by_key(|lit| lit.inner());
@@ -1009,7 +1021,7 @@ impl SolverActor {
                 self.tx_learned_clauses
                     .send(Message::LearnedClause(clause))
                     .unwrap_or_else(|e| panic!("Failed to send learned clause: {}", e));
-                num_learnts_cb += 1;
+                num_learnts_via_callback += 1;
             }
         });
 
@@ -1059,7 +1071,7 @@ impl SolverActor {
             }
             info!("Received {} new derived clauses", num_new_derived_clauses);
 
-            info!("num_learnts_cb = {}", num_learnts_cb);
+            info!("num_learnts_via_callback = {}", num_learnts_via_callback);
 
             // Set the conflict limit (budget) for this solving trial
             self.solver.limit("conflicts", self.cli.budget_solve as i32);
@@ -1109,19 +1121,99 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     let (tx_learned_clauses, rx_learned_clauses) = mpsc::channel();
 
     // Create the solver actor
-    let mut solver_actor = SolverActor::new(tx_learned_clauses.clone(), rx_derived_clauses, cli.clone());
+    let mut solver_actor = SolverActor::new(tx_learned_clauses, rx_derived_clauses, cli.clone());
 
     let finish = Arc::new(AtomicBool::new(false));
 
-    // Spawn a searcher actor in its own thread
-    let searcher_thread = {
-        let cli = cli.clone();
+    let mut parts_for_derivers: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
+    let mut parts_for_mediator: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
+    for _ in 0..cli.num_derivers {
+        let (txd, rxd) = mpsc::channel();
+        let (txl, rxl) = mpsc::channel();
+        parts_for_derivers.push((txd, rxl));
+        parts_for_mediator.push((txl, rxd));
+    }
+    let mediator = {
+        let (txs_learned_clauses, rxs_derived_clauses): (Vec<_>, Vec<_>) = parts_for_mediator.into_iter().unzip();
         let finish = Arc::clone(&finish);
         thread::spawn(move || {
-            let mut searcher_actor = SearcherActor::new(tx_derived_clauses, rx_learned_clauses, cli, finish);
-            searcher_actor.run();
+            'out: loop {
+                if finish.load(Ordering::Acquire) {
+                    info!("Finishing searcher.");
+                    break;
+                }
+
+                thread::sleep(Duration::from_millis(1000));
+
+                // info!("Mediator loop...");
+                let time_transfer = Instant::now();
+                let mut num_received = 0;
+                let mut num_sent = 0;
+
+                // Solver -> Derivers (learned clauses)
+                loop {
+                    match rx_learned_clauses.try_recv() {
+                        Ok(msg) => {
+                            // info!("Mediator received message from solver: {:?}", msg);
+                            num_received += 1;
+                            for tx in txs_learned_clauses.iter() {
+                                tx.send(msg.clone()).unwrap();
+                                num_sent += 1;
+                            }
+                        }
+                        Err(TryRecvError::Empty) => {
+                            break;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            break 'out;
+                        }
+                    }
+                }
+
+                // Derivers -> Solver (derived clauses)
+                for rx in rxs_derived_clauses.iter() {
+                    loop {
+                        match rx.try_recv() {
+                            Ok(msg) => {
+                                // info!("Mediator received message from deriver: {:?}", msg);
+                                num_received += 1;
+                                tx_derived_clauses.send(msg).unwrap();
+                                num_sent += 1;
+                            }
+                            Err(TryRecvError::Empty) => {
+                                break;
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                break 'out;
+                            }
+                        }
+                    }
+                }
+
+                let time_transfer = time_transfer.elapsed();
+                info!(
+                    "Mediator received {} and sent {} messages in {:.3}s",
+                    num_received,
+                    num_sent,
+                    time_transfer.as_secs_f64()
+                );
+            }
         })
     };
+
+    let derivers: Vec<_> = parts_for_derivers
+        .into_iter()
+        .enumerate()
+        .map(|(i, (tx, rx))| {
+            let cli = cli.clone();
+            let finish = Arc::clone(&finish);
+            thread::spawn(move || {
+                let seed = cli.seed + i as u64;
+                let mut searcher_actor = SearcherActor::new(tx, rx, cli, finish, seed);
+                searcher_actor.run();
+            })
+        })
+        .collect();
 
     // Run the solver actor in the main thread
     let result = solver_actor.run();
@@ -1132,7 +1224,10 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
 
     // Wait for the searcher to finish (after termination message is sent)
     if false {
-        searcher_thread.join().unwrap();
+        for t in derivers {
+            t.join().unwrap();
+        }
+        mediator.join().unwrap();
     }
 
     Ok(result) // Return the result from the solver actor
