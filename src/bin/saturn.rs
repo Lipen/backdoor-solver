@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
+use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use std::{process, thread};
 
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
@@ -19,6 +19,7 @@ use cadical::statik::Cadical;
 use cadical::{LitValue, SolveResponse};
 
 use clap::Parser;
+use crossbeam_channel::{unbounded, Receiver, Select, Sender, TryRecvError};
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
@@ -1117,8 +1118,8 @@ impl SolverActor {
 // Main function to set up the actors and start the simulation
 fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     // Create channels for communication between the searcher and solver
-    let (tx_derived_clauses, rx_derived_clauses) = mpsc::channel();
-    let (tx_learned_clauses, rx_learned_clauses) = mpsc::channel();
+    let (tx_derived_clauses, rx_derived_clauses) = unbounded();
+    let (tx_learned_clauses, rx_learned_clauses) = unbounded();
 
     // Create the solver actor
     let mut solver_actor = SolverActor::new(tx_learned_clauses, rx_derived_clauses, cli.clone());
@@ -1128,8 +1129,8 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     let mut parts_for_derivers: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
     let mut parts_for_mediator: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
     for _ in 0..cli.num_derivers {
-        let (txd, rxd) = mpsc::channel();
-        let (txl, rxl) = mpsc::channel();
+        let (txd, rxd) = unbounded();
+        let (txl, rxl) = unbounded();
         parts_for_derivers.push((txd, rxl));
         parts_for_mediator.push((txl, rxd));
     }
@@ -1137,66 +1138,42 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
         let (txs_learned_clauses, rxs_derived_clauses): (Vec<_>, Vec<_>) = parts_for_mediator.into_iter().unzip();
         let finish = Arc::clone(&finish);
         thread::spawn(move || {
-            'out: loop {
+            let mut rxs = Vec::new();
+            // Note: 0-th receiver must be the learned clauses from the solver!
+            rxs.push(rx_learned_clauses);
+            for rx in rxs_derived_clauses {
+                rxs.push(rx);
+            }
+
+            let mut sel = Select::new();
+            for r in rxs.iter() {
+                sel.recv(r);
+            }
+
+            loop {
                 if finish.load(Ordering::Acquire) {
                     info!("Finishing searcher.");
                     break;
                 }
 
-                thread::sleep(Duration::from_millis(1000));
-
-                // info!("Mediator loop...");
-                let time_transfer = Instant::now();
-                let mut num_received = 0;
-                let mut num_sent = 0;
-
-                // Solver -> Derivers (learned clauses)
-                loop {
-                    match rx_learned_clauses.try_recv() {
-                        Ok(msg) => {
-                            // info!("Mediator received message from solver: {:?}", msg);
-                            num_received += 1;
+                let index = sel.ready();
+                match rxs[index].try_recv() {
+                    Ok(msg) => {
+                        if index == 0 {
                             for tx in txs_learned_clauses.iter() {
                                 tx.send(msg.clone()).unwrap();
-                                num_sent += 1;
                             }
-                        }
-                        Err(TryRecvError::Empty) => {
-                            break;
-                        }
-                        Err(TryRecvError::Disconnected) => {
-                            break 'out;
+                        } else {
+                            tx_derived_clauses.send(msg).unwrap();
                         }
                     }
-                }
-
-                // Derivers -> Solver (derived clauses)
-                for rx in rxs_derived_clauses.iter() {
-                    loop {
-                        match rx.try_recv() {
-                            Ok(msg) => {
-                                // info!("Mediator received message from deriver: {:?}", msg);
-                                num_received += 1;
-                                tx_derived_clauses.send(msg).unwrap();
-                                num_sent += 1;
-                            }
-                            Err(TryRecvError::Empty) => {
-                                break;
-                            }
-                            Err(TryRecvError::Disconnected) => {
-                                break 'out;
-                            }
-                        }
+                    Err(TryRecvError::Empty) => {
+                        continue;
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        break;
                     }
                 }
-
-                let time_transfer = time_transfer.elapsed();
-                info!(
-                    "Mediator received {} and sent {} messages in {:.3}s",
-                    num_received,
-                    num_sent,
-                    time_transfer.as_secs_f64()
-                );
             }
         })
     };
