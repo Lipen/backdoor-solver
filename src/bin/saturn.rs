@@ -687,7 +687,7 @@ impl SearcherActor {
                                             neighbors.get_mut(&(a, b)).unwrap().retain(|&i| i != best_cube);
                                         }
                                         let time_rescore = time_rescore.elapsed();
-                                        if verb || time_rescore.as_secs_f64() > 0.1 {
+                                        if verb || time_rescore.as_secs_f64() > 1.0 {
                                             debug!("Rescored in {:.1}s", time_rescore.as_secs_f64());
                                         }
                                     }
