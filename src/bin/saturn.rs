@@ -4,8 +4,7 @@ use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
@@ -131,6 +130,7 @@ struct Cli {
 }
 
 // Result of the SAT solver
+#[allow(unused)]
 enum SolveResult {
     SAT, // TODO: model
     UNSAT,
@@ -417,13 +417,13 @@ impl SearcherActor {
                 );
                 pb.set_message("trie construction");
                 let mut num_normal_cubes: u64 = 0;
-                'out: for (old, new) in iproduct!(cubes_product, hard_tasks).progress_with(pb) {
+                'prod: for (old, new) in iproduct!(cubes_product, hard_tasks).progress_with(pb) {
                     let cube = concat_cubes(old, new);
                     for i in 1..cube.len() {
                         if cube[i] == -cube[i - 1] {
                             // Skip the cube with inconsistent literals:
                             // log::warn!("Skipping the concatenated cube {} with inconsistent literals", display_slice(&cube));
-                            continue 'out;
+                            continue 'prod;
                         }
                     }
                     assert_eq!(cube.len(), variables.len());
