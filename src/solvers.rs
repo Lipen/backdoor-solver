@@ -1,5 +1,6 @@
 use crate::lit::Lit;
 use crate::var::Var;
+
 use cadical::statik::Cadical;
 use cadical::FixedResponse;
 

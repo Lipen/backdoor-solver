@@ -1,6 +1,6 @@
-use log::trace;
-
 use std::ops::{Index, IndexMut};
+
+use log::trace;
 
 use crate::arena::{Arena, Id};
 

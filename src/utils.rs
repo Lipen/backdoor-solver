@@ -1,4 +1,3 @@
-use flate2::read::GzDecoder;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
@@ -7,6 +6,7 @@ use std::io;
 use std::io::{BufRead, BufReader, LineWriter, Write};
 use std::path::Path;
 
+use flate2::read::GzDecoder;
 use itertools::{join, zip_eq, Itertools, MultiProduct};
 use log::{debug, trace};
 

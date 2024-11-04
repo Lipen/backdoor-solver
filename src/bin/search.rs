@@ -11,9 +11,7 @@ use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
-use backdoor::utils::{
-    clause_to_external, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs, write_clause, DisplaySlice,
-};
+use backdoor::utils::*;
 use backdoor::var::Var;
 
 use cadical::statik::Cadical;

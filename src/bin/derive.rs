@@ -13,9 +13,7 @@ use rand::prelude::*;
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::trie::Trie;
-use backdoor::utils::parse_multiple_comma_separated_intervals;
-use backdoor::utils::parse_multiple_comma_separated_intervals_from;
-use backdoor::utils::{clause_to_external, concat_cubes, create_line_writer, parse_dimacs, partition_tasks_cadical, DisplaySlice};
+use backdoor::utils::*;
 use backdoor::var::Var;
 
 use cadical::statik::Cadical;

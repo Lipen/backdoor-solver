@@ -18,10 +18,7 @@ use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
-use backdoor::utils::{
-    clause_from_external, clause_to_external, concat_cubes, create_line_writer, determine_vars_pool, get_hard_tasks, parse_dimacs,
-    propcheck_all_trie_via_internal, write_clause, DisplaySlice,
-};
+use backdoor::utils::*;
 use backdoor::var::Var;
 
 use cadical::statik::Cadical;
