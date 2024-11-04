@@ -157,6 +157,7 @@ struct Cli {
     no_stats: bool,
 }
 
+#[allow(unused)]
 enum SolveResult {
     SAT(Vec<Lit>),
     UNSAT,
