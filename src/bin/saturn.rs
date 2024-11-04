@@ -151,6 +151,7 @@ struct SearcherActor {
     rx_learned_clauses: Receiver<Message>,
     cli: Cli,
     searcher: BackdoorSearcher,
+    all_clauses: HashSet<Vec<Lit>>,
     finish: Arc<AtomicBool>,
 }
 
@@ -162,10 +163,31 @@ impl SearcherActor {
         finish: Arc<AtomicBool>,
         seed: u64,
     ) -> Self {
-        let solver = Cadical::new();
-        for clause in parse_dimacs(&cli.path_cnf) {
-            solver.add_clause(clause_to_external(&clause));
+        let mut all_clauses: HashSet<Vec<Lit>> = HashSet::new();
+        for mut clause in parse_dimacs(&cli.path_cnf) {
+            clause.sort_by_key(|lit| lit.inner());
+            all_clauses.insert(clause);
         }
+        info!("Original clauses: {}", all_clauses.len());
+
+        let solver = Cadical::new();
+        // Set Cadical options:
+        // FIXME: currently, we do NOT set any options, because this solver is not the main one.
+        //        It is generally unclear whether the searcher's solver should also be set up.
+        // if let Some(s) = &cli.cadical_options {
+        //     for part in s.split(",") {
+        //         let parts: Vec<&str> = part.splitn(2, '=').collect();
+        //         let key = parts[0];
+        //         let value = parts[1].parse().unwrap();
+        //         info!("Cadical option: {}={}", key, value);
+        //         solver.set_option(key, value);
+        //     }
+        // }
+        // Add all original clauses to the solver:
+        for clause in all_clauses.iter() {
+            solver.add_clause(clause_to_external(clause));
+        }
+
         let pool = determine_vars_pool(&cli.path_cnf, &cli.allowed_vars, &cli.banned_vars);
         let options = Options {
             seed,
@@ -179,6 +201,7 @@ impl SearcherActor {
             rx_learned_clauses,
             cli,
             searcher,
+            all_clauses,
             finish,
         }
     }
@@ -190,14 +213,20 @@ impl SearcherActor {
         //     writeln!(f, "run,status,size").unwrap();
         // }
 
-        // Cartesian product of hard tasks:
-        let mut cubes_product: Vec<Vec<Lit>> = vec![vec![]];
+        let mut num_learnts_via_callback = 0;
+        match &self.searcher.solver {
+            SatSolver::Cadical(solver) => {
+                solver.set_learn(10, |clause| {
+                    let mut clause = clause_from_external(clause);
+                    clause.sort_by_key(|lit| lit.inner());
 
-        // All new clauses:
-        let mut all_new_clauses: HashSet<Vec<Lit>> = HashSet::new();
-
-        // Budget for filtering:
-        let mut budget_filter = self.cli.budget_filter;
+                    if self.all_clauses.insert(clause.clone()) {
+                        // info!("New learned clause: {}", display_slice(&clause));
+                        num_learnts_via_callback += 1;
+                    }
+                });
+            }
+        }
 
         if self.cli.budget_presolve > 0 {
             info!("Pre-solving with {} conflicts budget...", self.cli.budget_presolve);
@@ -238,17 +267,26 @@ impl SearcherActor {
             }
         }
 
+        // Cartesian product of hard tasks:
+        let mut cubes_product: Vec<Vec<Lit>> = vec![vec![]];
+
+        // Budget for filtering:
+        let mut budget_filter = self.cli.budget_filter;
+
         'out: loop {
             if self.finish.load(Ordering::Acquire) {
                 info!("Finishing searcher.");
                 break;
             }
 
+            info!("num_learnts_via_callback = {}", num_learnts_via_callback);
+
             let mut num_new_learnts = 0;
             loop {
                 match self.rx_learned_clauses.try_recv() {
                     Ok(Message::LearnedClause(learned_clause)) => {
-                        if all_new_clauses.insert(learned_clause.clone()) {
+                        // Note: learned_clause is already sorted
+                        if self.all_clauses.insert(learned_clause.clone()) {
                             // log::info!("Received new learned clause: {}", display_slice(&learned_clause));
                             num_new_learnts += 1;
                             self.searcher.solver.add_clause(&learned_clause);
@@ -353,7 +391,7 @@ impl SearcherActor {
                     let mut new_derived_clauses = Vec::new();
                     for mut clause in derived_clauses {
                         clause.sort_by_key(|lit| lit.inner());
-                        if all_new_clauses.insert(clause.clone()) {
+                        if self.all_clauses.insert(clause.clone()) {
                             new_derived_clauses.push(clause)
                         }
                     }
@@ -489,7 +527,7 @@ impl SearcherActor {
                     let mut new_clauses: Vec<Vec<Lit>> = Vec::new();
                     for mut lemma in derived_clauses {
                         lemma.sort_by_key(|lit| lit.inner());
-                        if all_new_clauses.insert(lemma.clone()) {
+                        if self.all_clauses.insert(lemma.clone()) {
                             // if let Some(f) = &mut file_derived_clauses {
                             //     write_clause(f, &lemma)?;
                             // }
@@ -755,17 +793,21 @@ impl SearcherActor {
                 match &self.searcher.solver {
                     SatSolver::Cadical(solver) => {
                         debug!("Retrieving clauses from the solver...");
-                        // let time_extract = Instant::now();
-                        // let mut num_new = 0;
+                        let time_extract = Instant::now();
+                        let mut num_new = 0;
                         for clause in solver.extract_clauses(true) {
                             let mut clause = clause_from_external(clause);
                             clause.sort_by_key(|lit| lit.inner());
-                            all_new_clauses.insert(clause);
-                            // num_new += 1;
+                            for lit in clause.iter() {
+                                assert!(self.searcher.solver.is_active(lit.var()));
+                            }
+                            if self.all_clauses.insert(clause) {
+                                num_new += 1;
+                            }
                         }
-                        // let time_extract = time_extract.elapsed();
+                        let time_extract = time_extract.elapsed();
                         // total_time_extract += time_extract;
-                        // debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
+                        debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
                         // debug!(
                         //      "So far total {} clauses, total spent {:.3}s for extraction",
                         //      all_clauses.len(),
@@ -860,27 +902,27 @@ impl SearcherActor {
                 // }
 
                 // Populate the set of ALL clauses:
-                match &self.searcher.solver {
-                    SatSolver::Cadical(solver) => {
-                        debug!("Retrieving clauses from the solver...");
-                        // let time_extract = Instant::now();
-                        // let mut num_new = 0;
-                        for clause in solver.extract_clauses(true) {
-                            let mut clause = clause_from_external(clause);
-                            clause.sort_by_key(|lit| lit.inner());
-                            all_new_clauses.insert(clause);
-                            // num_new += 1;
-                        }
-                        // let time_extract = time_extract.elapsed();
-                        // total_time_extract += time_extract;
-                        // debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
-                        // debug!(
-                        //     "So far total {} clauses, total spent {:.3}s for extraction",
-                        //     all_clauses.len(),
-                        //     total_time_extract.as_secs_f64()
-                        // );
-                    }
-                }
+                // match &self.searcher.solver {
+                //     SatSolver::Cadical(solver) => {
+                //         debug!("Retrieving clauses from the solver...");
+                //         // let time_extract = Instant::now();
+                //         // let mut num_new = 0;
+                //         for clause in solver.extract_clauses(true) {
+                //             let mut clause = clause_from_external(clause);
+                //             clause.sort_by_key(|lit| lit.inner());
+                //             all_new_clauses.insert(clause);
+                //             // num_new += 1;
+                //         }
+                //         // let time_extract = time_extract.elapsed();
+                //         // total_time_extract += time_extract;
+                //         // debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
+                //         // debug!(
+                //         //     "So far total {} clauses, total spent {:.3}s for extraction",
+                //         //     all_clauses.len(),
+                //         //     total_time_extract.as_secs_f64()
+                //         // );
+                //     }
+                // }
             }
             let time_filter = time_filter.elapsed();
             debug!(
@@ -923,7 +965,7 @@ impl SearcherActor {
                 let mut new_clauses: Vec<Vec<Lit>> = Vec::new();
                 for mut lemma in derived_clauses {
                     lemma.sort_by_key(|lit| lit.inner());
-                    if all_new_clauses.insert(lemma.clone()) {
+                    if self.all_clauses.insert(lemma.clone()) {
                         // if let Some(f) = &mut file_derived_clauses {
                         //     write_clause(f, &lemma)?;
                         // }
