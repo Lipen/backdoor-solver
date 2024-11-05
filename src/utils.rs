@@ -503,7 +503,7 @@ pub fn propcheck_all_trie_via_internal(
     total_count
 }
 
-pub fn write_clause(f: &mut impl Write, lits: &[Lit]) -> std::io::Result<()> {
+pub fn write_clause(f: &mut impl Write, lits: &[Lit]) -> io::Result<()> {
     for lit in lits.iter() {
         write!(f, "{} ", lit)?;
     }
@@ -572,7 +572,7 @@ mod tests {
         // Forbid (x1 AND ~x2)
         solver.add_clause([-x1, x2]);
 
-        info!("vars = {}, clauses = {}", solver.vars(), solver.clauses_iter().count());
+        info!("vars = {}, clauses = {}", solver.vars(), solver.irredundant());
 
         // Problem is satisfiable.
         // let res = solver.solve();
@@ -581,7 +581,7 @@ mod tests {
         let vars = vec![x1, x2];
 
         info!("----------------------");
-        let count_tree = solver.propcheck_all_tree(&vars, 0, false);
+        let count_tree = solver.propcheck_all_tree(&vars, 0, None);
         info!("count_tree = {}", count_tree);
 
         info!("----------------------");
