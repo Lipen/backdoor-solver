@@ -42,7 +42,7 @@ impl SatSolver {
         }
     }
 
-    pub fn add_clause(&mut self, lits: &[Lit]) {
+    pub fn add_clause(&self, lits: &[Lit]) {
         match self {
             SatSolver::Cadical(solver) => {
                 let clause = lits_to_external(lits);
@@ -52,7 +52,7 @@ impl SatSolver {
         }
     }
 
-    pub fn propcheck_all_tree(&mut self, vars: &[Var], limit: u64) -> u64 {
+    pub fn propcheck_all_tree(&self, vars: &[Var], limit: u64) -> u64 {
         match self {
             SatSolver::Cadical(solver) => {
                 let vars_external = vars_to_external(vars);
