@@ -172,17 +172,16 @@ impl SearcherActor {
 
         let solver = Cadical::new();
         // Set Cadical options:
-        // FIXME: currently, we do NOT set any options, because this solver is not the main one.
-        //        It is generally unclear whether the searcher's solver should also be set up.
-        // if let Some(s) = &cli.cadical_options {
-        //     for part in s.split(",") {
-        //         let parts: Vec<&str> = part.splitn(2, '=').collect();
-        //         let key = parts[0];
-        //         let value = parts[1].parse().unwrap();
-        //         info!("Cadical option: {}={}", key, value);
-        //         solver.set_option(key, value);
-        //     }
-        // }
+        // TODO: make separate options for main/deriver solvers.
+        if let Some(s) = &cli.cadical_options {
+            for part in s.split(",") {
+                let parts: Vec<&str> = part.splitn(2, '=').collect();
+                let key = parts[0];
+                let value = parts[1].parse().unwrap();
+                info!("Cadical option: {}={}", key, value);
+                solver.set_option(key, value);
+            }
+        }
         // Add all original clauses to the solver:
         for clause in all_clauses.iter() {
             solver.add_clause(clause_to_external(clause));
@@ -216,12 +215,18 @@ impl SearcherActor {
         let mut num_learnts_via_callback = 0;
         match &self.searcher.solver {
             SatSolver::Cadical(solver) => {
-                solver.set_learn(10, |clause| {
+                solver.unsafe_set_learn(10, |clause| {
                     let mut clause = clause_from_external(clause);
                     clause.sort_by_key(|lit| lit.inner());
 
+                    // for lit in clause.iter() {
+                    //     assert!(solver.is_active(lit.to_external()));
+                    // }
+
                     if self.all_clauses.insert(clause.clone()) {
-                        // info!("New learned clause: {}", display_slice(&clause));
+                        // if clause.len() <= 3 {
+                        //     info!("New learned clause in Deriver: {}", display_slice(&clause));
+                        // }
                         num_learnts_via_callback += 1;
                     }
                 });
@@ -790,31 +795,37 @@ impl SearcherActor {
                 // }
 
                 // Populate the set of ALL clauses:
-                match &self.searcher.solver {
-                    SatSolver::Cadical(solver) => {
-                        debug!("Retrieving clauses from the solver...");
-                        let time_extract = Instant::now();
-                        let mut num_new = 0;
-                        for clause in solver.extract_clauses(true) {
-                            let mut clause = clause_from_external(clause);
-                            clause.sort_by_key(|lit| lit.inner());
-                            for lit in clause.iter() {
-                                assert!(self.searcher.solver.is_active(lit.var()));
-                            }
-                            if self.all_clauses.insert(clause) {
-                                num_new += 1;
-                            }
-                        }
-                        let time_extract = time_extract.elapsed();
-                        // total_time_extract += time_extract;
-                        debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
-                        // debug!(
-                        //      "So far total {} clauses, total spent {:.3}s for extraction",
-                        //      all_clauses.len(),
-                        //      total_time_extract.as_secs_f64()
-                        //  );
-                    }
-                }
+                // match &self.searcher.solver {
+                //     SatSolver::Cadical(solver) => {
+                //         debug!("Retrieving clauses from the solver...");
+                //         let time_extract = Instant::now();
+                //         let mut num_new = 0;
+                //         let mut new_new = Vec::new();
+                //         for clause in solver.extract_clauses(true) {
+                //             if clause.len() > 10 {
+                //                 continue;
+                //             }
+                //             let mut clause = clause_from_external(clause);
+                //             clause.sort_by_key(|lit| lit.inner());
+                //             for lit in clause.iter() {
+                //                 assert!(self.searcher.solver.is_active(lit.var()));
+                //             }
+                //             if self.all_clauses.insert(clause.clone()) {
+                //                 num_new += 1;
+                //                 new_new.push(clause);
+                //             }
+                //         }
+                //         let time_extract = time_extract.elapsed();
+                //         // total_time_extract += time_extract;
+                //         debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
+                //         debug!("[{}]", new_new.iter().map(display_slice).join(", "));
+                //         // debug!(
+                //         //      "So far total {} clauses, total spent {:.3}s for extraction",
+                //         //      all_clauses.len(),
+                //         //      total_time_extract.as_secs_f64()
+                //         //  );
+                //     }
+                // }
 
                 cubes_product = cubes_product
                     .into_iter()
@@ -1055,9 +1066,13 @@ impl SolverActor {
 
     fn run(&mut self) -> SolveResult {
         let mut num_learnts_via_callback = 0;
-        self.solver.set_learn(10, |clause| {
+        self.solver.unsafe_set_learn(10, |clause| {
             let mut clause = clause_from_external(clause);
             clause.sort_by_key(|lit| lit.inner());
+
+            // for lit in clause.iter() {
+            //     assert!(self.solver.is_active(lit.to_external()));
+            // }
 
             if self.all_clauses.insert(clause.clone()) {
                 // info!("New learned clause: {}", display_slice(&clause));
@@ -1180,6 +1195,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
         let (txs_learned_clauses, rxs_derived_clauses): (Vec<_>, Vec<_>) = parts_for_mediator.into_iter().unzip();
         let finish = Arc::clone(&finish);
         thread::spawn(move || {
+            thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
             let mut rxs = Vec::new();
             // Note: 0-th receiver must be the learned clauses from the solver!
             rxs.push(rx_learned_clauses);
@@ -1227,12 +1243,15 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
             let cli = cli.clone();
             let finish = Arc::clone(&finish);
             thread::spawn(move || {
+                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
                 let seed = cli.seed + i as u64;
                 let mut searcher_actor = SearcherActor::new(tx, rx, cli, finish, seed);
                 searcher_actor.run();
             })
         })
         .collect();
+
+    // core_affinity::set_for_current(core_affinity::CoreId { id: 0 });
 
     // Run the solver actor in the main thread
     let result = solver_actor.run();
