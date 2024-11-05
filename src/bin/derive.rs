@@ -83,7 +83,7 @@ fn main() -> color_eyre::Result<()> {
         .collect();
     info!("Total backdoors: {}", backdoors.len());
     for backdoor in backdoors.iter() {
-        debug!("backdoor = {}", DisplaySlice(backdoor));
+        debug!("backdoor = {}", display_slice(backdoor));
     }
 
     // Initialize Cadical:
@@ -135,7 +135,7 @@ fn main() -> color_eyre::Result<()> {
         let (hard, easy) = partition_tasks_cadical(backdoor, &solver);
         debug!(
             "Backdoor {} has {} hard and {} easy tasks",
-            DisplaySlice(backdoor),
+            display_slice(backdoor),
             hard.len(),
             easy.len()
         );
@@ -164,7 +164,7 @@ fn main() -> color_eyre::Result<()> {
         let time_derive = Instant::now();
         // if hard.len() <= 30 {
         //     for cube in hard.iter() {
-        //         debug!("cube = {}", DisplaySlice(&cube));
+        //         debug!("cube = {}", display_slice(&cube));
         //     }
         // }
         let derived_clauses = derive_clauses(&hard, args.derive_ternary);
@@ -176,7 +176,7 @@ fn main() -> color_eyre::Result<()> {
             derived_clauses.iter().filter(|c| c.len() > 2).count(),
             time_derive.elapsed().as_secs_f64()
         );
-        // debug!("[{}]", derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+        // debug!("[{}]", derived_clauses.iter().map(display_slice).join(", "));
 
         let mut new_clauses = Vec::new();
         for mut clause in derived_clauses {
@@ -200,7 +200,7 @@ fn main() -> color_eyre::Result<()> {
             new_clauses.iter().filter(|c| c.len() == 2).count(),
             new_clauses.iter().filter(|c| c.len() > 2).count()
         );
-        // debug!("[{}]", new_derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+        // debug!("[{}]", new_derived_clauses.iter().map(display_slice).join(", "));
 
         // ------------------------------------------------------------------------
 
@@ -229,7 +229,7 @@ fn main() -> color_eyre::Result<()> {
             s.extend(hard[0].iter().map(|lit| lit.var()));
             s.into_iter().sorted().collect_vec()
         };
-        debug!("Total {} variables: {}", variables.len(), DisplaySlice(&variables));
+        debug!("Total {} variables: {}", variables.len(), display_slice(&variables));
 
         info!("Constructing trie out of {} cubes...", cubes_product.len() * hard.len());
         let time_trie_construct = Instant::now();
@@ -303,7 +303,7 @@ fn main() -> color_eyre::Result<()> {
                 return true;
             }
 
-            // debug!("cube = {}", DisplaySlice(cube));
+            // debug!("cube = {}", display_slice(cube));
             for &lit in cube.iter() {
                 solver.assume(lit.to_external()).unwrap();
             }
@@ -389,7 +389,7 @@ fn main() -> color_eyre::Result<()> {
             derived_clauses.iter().filter(|c| c.len() > 2).count(),
             time_derive.as_secs_f64()
         );
-        // debug!("[{}]", derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+        // debug!("[{}]", derived_clauses.iter().map(display_slice).join(", "));
 
         let mut new_derived_clauses = Vec::new();
         for mut clause in derived_clauses {
@@ -413,7 +413,7 @@ fn main() -> color_eyre::Result<()> {
             new_derived_clauses.iter().filter(|c| c.len() == 2).count(),
             new_derived_clauses.iter().filter(|c| c.len() > 2).count()
         );
-        // debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+        // debug!("[{}]", new_clauses.iter().map(display_slice).join(", "));
 
         let time_run = time_run.elapsed();
         info!("Done run {} / {} in {:.1}s", run_number, backdoors.len(), time_run.as_secs_f64());

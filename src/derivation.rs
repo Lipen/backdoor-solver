@@ -5,14 +5,14 @@ use itertools::{zip_eq, Itertools};
 use log::{debug, trace};
 
 use crate::lit::Lit;
-use crate::utils::DisplaySlice;
+use crate::utils::display_slice;
 
 // TODO: derive_units
 // TODO: derive_binary
 // TODO: derive_ternary
 
 pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> {
-    trace!("derive_clauses(hard = [{}])", hard.iter().map(|c| DisplaySlice(c)).join(", "));
+    trace!("derive_clauses(hard = [{}])", hard.iter().map(|c| display_slice(c)).join(", "));
 
     // Trivial case:
     if hard.is_empty() {
@@ -60,12 +60,12 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
         let var = hard[0][i].var();
         if pos == 0 {
             let clause = vec![Lit::new(var, true)];
-            debug!("variable {} is never positive |= clause {}", var, DisplaySlice(&clause));
+            debug!("variable {} is never positive |= clause {}", var, display_slice(&clause));
             derived_clauses.push(clause);
         }
         if neg == 0 {
             let clause = vec![Lit::new(var, false)];
-            debug!("variable {} is never negative |= clause {}", var, DisplaySlice(&clause));
+            debug!("variable {} is never negative |= clause {}", var, display_slice(&clause));
             derived_clauses.push(clause);
         }
     }
@@ -117,22 +117,22 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
         let b = hard[0][j].var();
         if pp == 0 {
             let clause = vec![Lit::new(a, true), Lit::new(b, true)];
-            debug!("pair {}-{} is never pos-pos |= clause {}", a, b, DisplaySlice(&clause));
+            debug!("pair {}-{} is never pos-pos |= clause {}", a, b, display_slice(&clause));
             derived_clauses.push(clause);
         }
         if pn == 0 {
             let clause = vec![Lit::new(a, true), Lit::new(b, false)];
-            debug!("pair {}-{} is never pos-neg |= clause {}", a, b, DisplaySlice(&clause));
+            debug!("pair {}-{} is never pos-neg |= clause {}", a, b, display_slice(&clause));
             derived_clauses.push(clause);
         }
         if np == 0 {
             let clause = vec![Lit::new(a, false), Lit::new(b, true)];
-            debug!("pair {}-{} is never neg-pos |= clause {}", a, b, DisplaySlice(&clause));
+            debug!("pair {}-{} is never neg-pos |= clause {}", a, b, display_slice(&clause));
             derived_clauses.push(clause);
         }
         if nn == 0 {
             let clause = vec![Lit::new(a, false), Lit::new(b, false)];
-            debug!("pair {}-{} is never neg-neg |= clause {}", a, b, DisplaySlice(&clause));
+            debug!("pair {}-{} is never neg-neg |= clause {}", a, b, display_slice(&clause));
             derived_clauses.push(clause);
         }
     }
@@ -212,42 +212,42 @@ pub fn derive_clauses(hard: &[Vec<Lit>], derive_ternary: bool) -> Vec<Vec<Lit>> 
             let c = hard[0][k].var();
             if ppp == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, true), Lit::new(c, true)];
-                debug!("triple {}-{}-{} is never pos-pos-pos |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never pos-pos-pos |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if ppn == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, true), Lit::new(c, false)];
-                debug!("triple {}-{}-{} is never pos-pos-neg |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never pos-pos-neg |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if pnp == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, false), Lit::new(c, true)];
-                debug!("triple {}-{}-{} is never pos-neg-pos |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never pos-neg-pos |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if pnn == 0 {
                 let clause = vec![Lit::new(a, true), Lit::new(b, false), Lit::new(c, false)];
-                debug!("triple {}-{}-{} is never pos-neg-neg |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never pos-neg-neg |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if npp == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, true), Lit::new(c, true)];
-                debug!("triple {}-{}-{} is never neg-pos-pos |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never neg-pos-pos |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if npn == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, true), Lit::new(c, false)];
-                debug!("triple {}-{}-{} is never neg-pos-neg |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never neg-pos-neg |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if nnp == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, false), Lit::new(c, true)];
-                debug!("triple {}-{}-{} is never neg-neg-pos |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never neg-neg-pos |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
             if nnn == 0 {
                 let clause = vec![Lit::new(a, false), Lit::new(b, false), Lit::new(c, false)];
-                debug!("triple {}-{}-{} is never neg-neg-neg |= clause {}", a, b, c, DisplaySlice(&clause));
+                debug!("triple {}-{}-{} is never neg-neg-neg |= clause {}", a, b, c, display_slice(&clause));
                 derived_clauses.push(clause);
             }
         }

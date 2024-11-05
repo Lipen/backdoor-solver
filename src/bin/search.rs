@@ -368,7 +368,7 @@ fn main() -> color_eyre::Result<()> {
 
         let backdoor = result.best_instance.get_variables();
         let hard = get_hard_tasks(&backdoor, searcher.solver.as_cadical());
-        debug!("Backdoor {} has {} hard tasks", DisplaySlice(&backdoor), hard.len());
+        debug!("Backdoor {} has {} hard tasks", display_slice(&backdoor), hard.len());
         assert_eq!(hard.len() as u64, result.best_fitness.num_hard);
 
         // Probe the backdoor variables:
@@ -422,7 +422,7 @@ fn main() -> color_eyre::Result<()> {
                                 let (res, _) = solver.propcheck(&cube, false, false, true);
                                 if !res {
                                     let core = solver.propcheck_get_core();
-                                    info!("failed cube {} with core = {}", DisplaySlice(&cube), DisplaySlice(&core));
+                                    info!("failed cube {} with core = {}", display_slice(&cube), display_slice(&core));
                                     failed_pairs.push(cube);
                                 }
                             }
@@ -457,9 +457,10 @@ fn main() -> color_eyre::Result<()> {
 
                     let mut easy_cores: Vec<Vec<Lit>> = Vec::new();
                     for (i, cube) in easy.iter().enumerate() {
-                        let (res, _) = solver.propcheck(&cube.iter().map(|lit| lit.to_external()).collect_vec(), false, false, true);
+                        let cube_external = lits_to_external(cube);
+                        let (res, _) = solver.propcheck(&cube_external, false, false, true);
                         if res {
-                            panic!("Unexpected SAT on cube = {}", DisplaySlice(&cube));
+                            panic!("Unexpected SAT on cube = {}", display_slice(&cube));
                         } else {
                             let mut core = solver.propcheck_get_core().into_iter().map(|i| Lit::from_external(i)).collect_vec();
                             assert!(!core.is_empty());
@@ -468,8 +469,8 @@ fn main() -> color_eyre::Result<()> {
                                 "{}/{}: core = {} for cube = {}",
                                 i + 1,
                                 easy.len(),
-                                DisplaySlice(&core),
-                                DisplaySlice(cube)
+                                display_slice(&core),
+                                display_slice(cube)
                             );
                             assert_eq!(
                                 core.last().unwrap(),
@@ -516,7 +517,7 @@ fn main() -> color_eyre::Result<()> {
                     let easy_cores: HashSet<Vec<Lit>> = easy_cores.into_iter().collect();
                     debug!("Unique easy cores: {}", easy_cores.len());
                     for (i, core) in easy_cores.iter().enumerate() {
-                        debug!("[{}/{}]: {}", i + 1, easy_cores.len(), DisplaySlice(core));
+                        debug!("[{}/{}]: {}", i + 1, easy_cores.len(), display_slice(core));
 
                         let lemma = core.iter().map(|&lit| -lit).collect_vec();
                         solver.add_derived_clause(lits_to_external(&lemma));
@@ -528,7 +529,7 @@ fn main() -> color_eyre::Result<()> {
                         .collect();
                     debug!("Hard tasks: {}", hard.len());
                     for (i, cube) in hard.iter().enumerate() {
-                        debug!("[{}/{}]: {}", i + 1, hard.len(), DisplaySlice(cube));
+                        debug!("[{}/{}]: {}", i + 1, hard.len(), display_slice(cube));
                     }
 
                     let time_derive = Instant::now();
@@ -542,16 +543,16 @@ fn main() -> color_eyre::Result<()> {
                         derived_clauses.iter().filter(|c| c.len() > 2).count(),
                         time_derive.as_secs_f64()
                     );
-                    debug!("[{}]", derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+                    debug!("[{}]", derived_clauses.iter().map(|c| display_slice(c)).join(", "));
 
                     info!("Checking (probing) derived clauses...");
                     for clause in derived_clauses.iter() {
                         let cube = clause.iter().map(|lit| -lit.to_external()).collect_vec();
                         let (res, _) = solver.propcheck(&cube, false, false, true);
                         if res {
-                            info!("clause {} is not RUP", DisplaySlice(clause));
+                            info!("clause {} is not RUP", display_slice(clause));
                         } else {
-                            info!("clause {} has RUP", DisplaySlice(clause));
+                            info!("clause {} has RUP", display_slice(clause));
                         }
                     }
                 }
@@ -573,7 +574,7 @@ fn main() -> color_eyre::Result<()> {
                 derived_clauses.iter().filter(|c| c.len() > 2).count(),
                 time_derive.as_secs_f64()
             );
-            // debug!("[{}]", derived_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+            // debug!("[{}]", derived_clauses.iter().map(|c| display_slice(c)).join(", "));
 
             let mut new_clauses = Vec::new();
             for mut lemma in derived_clauses {
@@ -600,7 +601,7 @@ fn main() -> color_eyre::Result<()> {
                 new_clauses.iter().filter(|c| c.len() == 2).count(),
                 new_clauses.iter().filter(|c| c.len() > 2).count()
             );
-            // debug!("[{}]", new_clauses.iter().map(|c| DisplaySlice(c)).join(", "));
+            // debug!("[{}]", new_clauses.iter().map(|c| display_slice(c)).join(", "));
 
             let time_run = time_run.elapsed();
             info!("Done run {} / {} in {:.1}s", run_number, args.num_runs, time_run.as_secs_f64());

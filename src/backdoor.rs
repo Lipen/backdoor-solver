@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use itertools::Itertools;
 use rand::prelude::*;
 
-use crate::utils::DisplaySlice;
+use crate::utils::display_slice;
 use crate::var::Var;
 
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ impl Backdoor {
 impl Display for Backdoor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let vars = self.get_variables();
-        write!(f, "{}", DisplaySlice(&vars))
+        write!(f, "{}", display_slice(&vars))
     }
 }
 
