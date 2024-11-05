@@ -196,7 +196,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     }
     // solver.read_dimacs(&args.path_cnf, 1);
     for clause in parse_dimacs(&args.path_cnf) {
-        solver.add_clause(clause_to_external(&clause));
+        solver.add_clause(lits_to_external(&clause));
     }
     if args.freeze {
         info!("Freezing variables...");
@@ -369,7 +369,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                     let time_extract = Instant::now();
                     let mut num_new = 0;
                     for clause in solver.extract_clauses(true) {
-                        let mut clause = clause_from_external(clause);
+                        let mut clause = lits_from_external(clause);
                         clause.sort_by_key(|lit| lit.inner());
                         all_clauses.insert(clause);
                         num_new += 1;
@@ -1085,7 +1085,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                     let time_extract = Instant::now();
                     let mut num_new = 0;
                     for clause in solver.extract_clauses(true) {
-                        let mut clause = clause_from_external(clause);
+                        let mut clause = lits_from_external(clause);
                         clause.sort_by_key(|lit| lit.inner());
                         (&mut all_clauses).insert(clause);
                         num_new += 1;
@@ -1230,7 +1230,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                     let time_extract = Instant::now();
                     let mut num_new = 0;
                     for clause in solver.extract_clauses(true) {
-                        let mut clause = clause_from_external(clause);
+                        let mut clause = lits_from_external(clause);
                         clause.sort_by_key(|lit| lit.inner());
                         all_clauses.insert(clause);
                         num_new += 1;

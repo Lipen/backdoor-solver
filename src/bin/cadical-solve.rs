@@ -1,8 +1,8 @@
 use std::time::Instant;
 
-use backdoor::utils::{clause_to_external, parse_dimacs};
-
 use cadical::statik::Cadical;
+
+use backdoor::utils::*;
 
 // Run:
 // cargo run --release --bin cadical-solve -- data/my.cnf
@@ -19,7 +19,7 @@ fn main() {
     let mut num_clauses = 0;
     for clause in parse_dimacs(path) {
         num_clauses += 1;
-        solver.add_clause(clause_to_external(&clause));
+        solver.add_clause(lits_to_external(&clause));
     }
     println!("num_clauses = {}", num_clauses);
     println!("solver.vars() = {}", solver.vars());

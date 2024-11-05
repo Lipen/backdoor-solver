@@ -4,7 +4,7 @@ use crate::var::Var;
 use cadical::statik::Cadical;
 use cadical::FixedResponse;
 
-use crate::utils::clause_to_external;
+use crate::utils::*;
 
 #[derive(Debug)]
 pub enum SatSolver {
@@ -45,8 +45,9 @@ impl SatSolver {
     pub fn add_clause(&mut self, lits: &[Lit]) {
         match self {
             SatSolver::Cadical(solver) => {
-                solver.add_clause(clause_to_external(lits));
-                // solver.add_derived_clause(clause_to_external(lits));
+                let clause = lits_to_external(lits);
+                solver.add_clause(clause);
+                // solver.add_derived_clause(clause);
             }
         }
     }
@@ -54,7 +55,7 @@ impl SatSolver {
     pub fn propcheck_all_tree(&mut self, vars: &[Var], limit: u64) -> u64 {
         match self {
             SatSolver::Cadical(solver) => {
-                let vars_external: Vec<i32> = vars.iter().map(|var| var.to_external() as i32).collect();
+                let vars_external = vars_to_external(vars);
                 // solver.propcheck_all_tree(&vars_external, limit, false)
                 solver.propcheck_all_tree_via_internal(&vars_external, limit, None, None)
             }

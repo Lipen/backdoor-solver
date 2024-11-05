@@ -195,8 +195,6 @@ fn main() -> color_eyre::Result<()> {
     debug!("Solver statistics:");
     print_stats(&solver, "  ");
 
-    let solver = SatSolver::new_cadical(solver);
-
     // Create the pool of variables available for EA:
     let pool: Vec<Var> = determine_vars_pool(&args.path_cnf, &args.allowed_vars, &args.banned_vars);
 
@@ -206,7 +204,7 @@ fn main() -> color_eyre::Result<()> {
         ban_used_variables: args.ban_used,
         ..DEFAULT_OPTIONS
     };
-    let mut searcher = BackdoorSearcher::new(solver, pool, options);
+    let mut searcher = BackdoorSearcher::new(SatSolver::new_cadical(solver), pool, options);
 
     // Create and open the file with resulting backdoors:
     let mut file_backdoors = args.path_output.as_ref().map(create_line_writer);
@@ -490,7 +488,7 @@ fn main() -> color_eyre::Result<()> {
                                 let res = solver.internal_propagate();
                                 assert!(res);
 
-                                let lits = clause_to_external(lits).collect_vec();
+                                let lits = lits_to_external(lits);
                                 if lits.len() >= 2 {
                                     for lit in lits {
                                         assert!(solver.is_active(lit), "lit {} is not active", lit);
@@ -521,7 +519,7 @@ fn main() -> color_eyre::Result<()> {
                         debug!("[{}/{}]: {}", i + 1, easy_cores.len(), DisplaySlice(core));
 
                         let lemma = core.iter().map(|&lit| -lit).collect_vec();
-                        solver.add_derived_clause(clause_to_external(&lemma));
+                        solver.add_derived_clause(lits_to_external(&lemma));
                     }
 
                     let hard: Vec<Vec<Lit>> = hard

@@ -184,7 +184,7 @@ impl SearcherActor {
         }
         // Add all original clauses to the solver:
         for clause in all_clauses.iter() {
-            solver.add_clause(clause_to_external(clause));
+            solver.add_clause(lits_to_external(clause));
         }
 
         let pool = determine_vars_pool(&cli.path_cnf, &cli.allowed_vars, &cli.banned_vars);
@@ -216,7 +216,7 @@ impl SearcherActor {
         match &self.searcher.solver {
             SatSolver::Cadical(solver) => {
                 solver.unsafe_set_learn(10, |clause| {
-                    let mut clause = clause_from_external(clause);
+                    let mut clause = lits_from_external(clause);
                     clause.sort_by_key(|lit| lit.inner());
 
                     // for lit in clause.iter() {
@@ -1042,17 +1042,15 @@ impl SolverActor {
         let solver = Cadical::new();
         // Set Cadical options:
         if let Some(s) = &cli.cadical_options {
-            for part in s.split(",") {
-                let parts: Vec<&str> = part.splitn(2, '=').collect();
-                let key = parts[0];
-                let value = parts[1].parse().unwrap();
-                info!("Cadical option: {}={}", key, value);
+            for (key, value) in parse_key_value_pairs(s) {
+                let value = value.parse::<i32>().unwrap();
+                info!("set option: {}={}", key, value);
                 solver.set_option(key, value);
             }
         }
         // Add all original clauses to the solver:
         for clause in all_clauses.iter() {
-            solver.add_clause(clause_to_external(clause));
+            solver.add_clause(lits_to_external(clause));
         }
 
         SolverActor {
@@ -1067,7 +1065,7 @@ impl SolverActor {
     fn run(&mut self) -> SolveResult {
         let mut num_learnts_via_callback = 0;
         self.solver.unsafe_set_learn(10, |clause| {
-            let mut clause = clause_from_external(clause);
+            let mut clause = lits_from_external(clause);
             clause.sort_by_key(|lit| lit.inner());
 
             // for lit in clause.iter() {
@@ -1124,7 +1122,7 @@ impl SolverActor {
                 if self.all_clauses.insert(derived_clause.clone()) {
                     // log::info!("Received new derived clause: {}", display_slice(&derived_clause));
                     num_new_derived_clauses += 1;
-                    self.solver.add_clause(clause_to_external(&derived_clause));
+                    self.solver.add_clause(lits_to_external(&derived_clause));
                 }
             }
             info!("Received {} new derived clauses", num_new_derived_clauses);

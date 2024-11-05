@@ -94,7 +94,7 @@ fn main() -> color_eyre::Result<()> {
     if args.freeze {
         for i in 0..solver.vars() {
             let lit = (i + 1) as i32;
-            solver.freeze(lit).unwrap();
+            solver.freeze(lit)?;
         }
     }
     solver.limit("conflicts", 0);
@@ -401,7 +401,7 @@ fn main() -> color_eyre::Result<()> {
                     }
                     writeln!(f, "0")?;
                 }
-                solver.add_clause(clause_to_external(&clause));
+                solver.add_clause(lits_to_external(&clause));
                 new_derived_clauses.push(clause.clone());
                 all_derived_clauses.push(clause);
             }
