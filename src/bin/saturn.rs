@@ -18,7 +18,7 @@ use cadical::statik::Cadical;
 use cadical::{LitValue, SolveResponse};
 
 use clap::Parser;
-use crossbeam_channel::{unbounded, Receiver, Select, Sender, TryRecvError};
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
@@ -1182,53 +1182,29 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     let finish = Arc::new(AtomicBool::new(false));
 
     let mut parts_for_derivers: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
-    let mut parts_for_mediator: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
+    let mut txs_learned_clauses: Vec<Sender<Message>> = Vec::new();
     for _ in 0..cli.num_derivers {
-        let (txd, rxd) = unbounded();
         let (txl, rxl) = unbounded();
-        parts_for_derivers.push((txd, rxl));
-        parts_for_mediator.push((txl, rxd));
+        parts_for_derivers.push((tx_derived_clauses.clone(), rxl));
+        txs_learned_clauses.push(txl);
     }
+    drop(tx_derived_clauses);
+
     let mediator = {
-        let (txs_learned_clauses, rxs_derived_clauses): (Vec<_>, Vec<_>) = parts_for_mediator.into_iter().unzip();
-        let finish = Arc::clone(&finish);
+        // let finish = Arc::clone(&finish);
         thread::spawn(move || {
             thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
-            let mut rxs = Vec::new();
-            // Note: 0-th receiver must be the learned clauses from the solver!
-            rxs.push(rx_learned_clauses);
-            for rx in rxs_derived_clauses {
-                rxs.push(rx);
-            }
 
-            let mut sel = Select::new();
-            for r in rxs.iter() {
-                sel.recv(r);
-            }
+            // TODO: somehow handle termination via 'finish'
+            // if finish.load(Ordering::Acquire) {
+            //     info!("Finishing searcher.");
+            //     break;
+            // }
 
-            loop {
-                if finish.load(Ordering::Acquire) {
-                    info!("Finishing searcher.");
-                    break;
-                }
-
-                let index = sel.ready();
-                match rxs[index].try_recv() {
-                    Ok(msg) => {
-                        if index == 0 {
-                            for tx in txs_learned_clauses.iter() {
-                                tx.send(msg.clone()).unwrap();
-                            }
-                        } else {
-                            tx_derived_clauses.send(msg).unwrap();
-                        }
-                    }
-                    Err(TryRecvError::Empty) => {
-                        continue;
-                    }
-                    Err(TryRecvError::Disconnected) => {
-                        break;
-                    }
+            for msg in rx_learned_clauses {
+                // debug!("Mediator received {:?}", msg);
+                for tx in txs_learned_clauses.iter() {
+                    tx.send(msg.clone()).unwrap();
                 }
             }
         })
