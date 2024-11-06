@@ -1172,58 +1172,49 @@ impl SolverActor {
 
 // Main function to set up the actors and start the simulation
 fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
-    // Create channels for communication between the searcher and solver
+    // Create channels for communication between the solver and searchers/mediator
     let (tx_derived_clauses, rx_derived_clauses) = unbounded();
     let (tx_learned_clauses, rx_learned_clauses) = unbounded();
 
     // Create the solver actor
     let mut solver_actor = SolverActor::new(tx_learned_clauses, rx_derived_clauses, cli.clone());
 
+    // Initialize the finish flag
     let finish = Arc::new(AtomicBool::new(false));
 
-    let mut parts_for_derivers: Vec<(Sender<Message>, Receiver<Message>)> = Vec::new();
-    let mut txs_learned_clauses: Vec<Sender<Message>> = Vec::new();
-    for _ in 0..cli.num_derivers {
-        let (txl, rxl) = unbounded();
-        parts_for_derivers.push((tx_derived_clauses.clone(), rxl));
-        txs_learned_clauses.push(txl);
-    }
-    drop(tx_derived_clauses);
+    // Create channels for communication between the mediator and searchers
+    let mut txls: Vec<Sender<Message>> = Vec::new();
 
-    let mediator = {
-        // let finish = Arc::clone(&finish);
-        thread::spawn(move || {
-            thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
-
-            // TODO: somehow handle termination via 'finish'
-            // if finish.load(Ordering::Acquire) {
-            //     info!("Finishing searcher.");
-            //     break;
-            // }
-
-            for msg in rx_learned_clauses {
-                // debug!("Mediator received {:?}", msg);
-                for tx in txs_learned_clauses.iter() {
-                    tx.send(msg.clone()).unwrap();
-                }
-            }
-        })
-    };
-
-    let derivers: Vec<_> = parts_for_derivers
-        .into_iter()
-        .enumerate()
-        .map(|(i, (tx, rx))| {
+    // Create the searcher actors
+    let derivers = (1..=cli.num_derivers)
+        .map(|i| {
+            let (txl, rxl) = unbounded();
+            txls.push(txl);
+            let txd = tx_derived_clauses.clone();
             let cli = cli.clone();
             let finish = Arc::clone(&finish);
             thread::spawn(move || {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
                 let seed = cli.seed + i as u64;
-                let mut searcher_actor = SearcherActor::new(tx, rx, cli, finish, seed);
+                let mut searcher_actor = SearcherActor::new(txd, rxl, cli, finish, seed);
                 searcher_actor.run();
             })
         })
-        .collect();
+        .collect::<Vec<_>>();
+    drop(tx_derived_clauses);
+
+    // Create the mediator responsible for broadcasting learned clauses to all derivers
+    let mediator = {
+        thread::spawn(move || {
+            thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min).unwrap();
+            for msg in rx_learned_clauses {
+                // debug!("Mediator received {:?}", msg);
+                for tx in txls.iter() {
+                    tx.send(msg.clone()).unwrap();
+                }
+            }
+        })
+    };
 
     // core_affinity::set_for_current(core_affinity::CoreId { id: 0 });
 
@@ -1234,7 +1225,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
     info!("Storing `true` in finish flag.");
     finish.store(true, Ordering::Release);
 
-    // Wait for the searcher to finish (after termination message is sent)
+    // Wait for all searchers and the mediator to finish
     if false {
         for t in derivers {
             t.join().unwrap();
@@ -1242,7 +1233,7 @@ fn solve(cli: Cli) -> color_eyre::Result<SolveResult> {
         mediator.join().unwrap();
     }
 
-    Ok(result) // Return the result from the solver actor
+    Ok(result)
 }
 
 fn main() -> color_eyre::Result<()> {
