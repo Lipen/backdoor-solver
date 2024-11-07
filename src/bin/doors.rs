@@ -191,7 +191,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         all_clauses.insert(clause);
     }
 
-    let mut final_model: Option<Vec<Lit>> = None;
+    // let mut final_model: Option<Vec<Lit>> = None;
 
     if args.budget_presolve > 0 {
         info!("Pre-solving with {} conflicts budget...", args.budget_presolve);
