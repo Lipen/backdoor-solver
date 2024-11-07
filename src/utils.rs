@@ -516,9 +516,8 @@ mod tests {
     use log::info;
     use test_log::test;
 
-    use crate::trie::build_trie;
-
     use super::*;
+    use crate::trie::build_trie;
 
     #[test]
     fn test_gray_to_number() {

@@ -7,15 +7,15 @@ use clap::Parser;
 use itertools::Itertools;
 use log::{debug, info};
 
+use cadical::statik::Cadical;
+use cadical::{FixedResponse, SolveResponse};
+
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::utils::*;
 use backdoor::var::Var;
-
-use cadical::statik::Cadical;
-use cadical::{FixedResponse, SolveResponse};
 
 // Run this example:
 // cargo run --release --bin search -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 1000

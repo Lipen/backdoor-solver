@@ -10,14 +10,14 @@ use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 use rand::prelude::*;
 
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
+
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::trie::Trie;
 use backdoor::utils::*;
 use backdoor::var::Var;
-
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
 
 // Run this example:
 // cargo run --release --bin derive -- data/mult/lec_CvK_12.cnf --backdoors 1994,2915,3557,3695,3912,4273,4383,4475/2095,2734,3905,3912,3977,4090,4158,4260 -o derived_clauses.txt

@@ -13,6 +13,9 @@ use log::{debug, info};
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
 
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
+
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
@@ -20,9 +23,6 @@ use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::*;
 use backdoor::var::Var;
-
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
 
 // Run this example:
 // cargo run --release --bin interleave -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 10000

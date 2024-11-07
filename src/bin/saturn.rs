@@ -6,17 +6,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
-use backdoor::derivation::derive_clauses;
-use backdoor::lit::Lit;
-use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
-use backdoor::solvers::SatSolver;
-use backdoor::trie::Trie;
-use backdoor::utils::*;
-use backdoor::var::Var;
-
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
-
 use clap::Parser;
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
@@ -24,6 +13,17 @@ use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
+
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
+
+use backdoor::derivation::derive_clauses;
+use backdoor::lit::Lit;
+use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
+use backdoor::solvers::SatSolver;
+use backdoor::trie::Trie;
+use backdoor::utils::*;
+use backdoor::var::Var;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "SAT Solver with Backdoor Search")]

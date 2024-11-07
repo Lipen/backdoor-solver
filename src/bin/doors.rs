@@ -15,6 +15,10 @@ use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 // use rayon::prelude::*;
 
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
+use sat_nexus_utils::pool::Pool;
+
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
@@ -22,9 +26,6 @@ use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::*;
 use backdoor::var::Var;
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
-use sat_nexus_utils::pool::Pool;
 
 // Run this example:
 // cargo run --release --bin doors -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 10000 --budget-presolve 10000 --budget-subsolve 10000 -t 4

@@ -1,10 +1,9 @@
-use crate::lit::Lit;
-use crate::var::Var;
-
 use cadical::statik::Cadical;
 use cadical::FixedResponse;
 
+use crate::lit::Lit;
 use crate::utils::*;
+use crate::var::Var;
 
 #[derive(Debug)]
 pub enum SatSolver {
