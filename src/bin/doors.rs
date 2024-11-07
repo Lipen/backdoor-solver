@@ -4,7 +4,9 @@ use std::fs::File;
 use std::io::LineWriter;
 use std::io::Write as _;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use color_eyre::eyre::bail;
@@ -13,17 +15,16 @@ use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 // use rayon::prelude::*;
 
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
-
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
-use backdoor::pool::{new_solver_pool, CubeTask};
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::*;
 use backdoor::var::Var;
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
+use sat_nexus_utils::pool::Pool;
 
 // Run this example:
 // cargo run --release --bin doors -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 10000 --budget-presolve 10000 --budget-subsolve 10000 -t 4
@@ -129,6 +130,12 @@ enum SolveResult {
     SAT(Vec<Lit>),
     UNSAT,
     UNKNOWN,
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Cube(Vec<Lit>),
+    Clause(Vec<Lit>),
 }
 
 fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
@@ -237,24 +244,57 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     let mut all_derived_clauses: Vec<Vec<Lit>> = Vec::new();
 
     // let pool = rayon::ThreadPoolBuilder::new().num_threads(args.threads).build()?;
-    let pool = new_solver_pool::<CubeTask, _, _>(
-        args.threads,
-        move |_| {
+    let pool = {
+        let init = move |_| {
             let solver = Cadical::new();
             for clause in parse_dimacs(&args.path_cnf) {
                 solver.add_clause(lits_to_external(&clause));
             }
+            // TODO: pre-solve
             solver
-        },
-        move |task, solver| {
-            for &lit in task.cube.iter() {
+        };
+        let solve = move |cube: &[Lit], solver: &Cadical| {
+            for &lit in cube.iter() {
                 solver.assume(lit.to_external()).unwrap();
             }
             solver.limit("conflicts", args.budget_subsolve as i32);
             let res = solver.solve().unwrap();
             res
-        },
-    );
+        };
+        let init = Arc::new(init);
+        let solve = Arc::new(solve);
+        Pool::<Message, (Vec<Lit>, SolveResponse, Duration)>::new_with(args.threads, move |i, task_receiver, result_sender| {
+            let solver = init(i);
+            for msg in task_receiver {
+                match msg {
+                    Message::Cube(cube) => {
+                        let time_solve = Instant::now();
+                        let res = solve(&cube, &solver);
+                        let time_solve = time_solve.elapsed();
+                        log::trace!("{:?} in {:.1}s for {:?}", res, time_solve.as_secs_f64(), cube);
+                        if result_sender.send((cube, res, time_solve)).is_err() {
+                            break;
+                        }
+                    }
+                    Message::Clause(clause) => {
+                        if clause.iter().all(|lit| solver.is_active(lit.to_external())) {
+                            // debug!("Adding clause {}", display_slice(&clause));
+                            solver.add_clause(lits_to_external(&clause));
+                        } else {
+                            // debug!("Skipping clause {} with inactive variables", display_slice(&clause));
+                        }
+                    }
+                }
+            }
+            debug!(
+                "finished {:?}: conflicts = {}, decisions = {}, propagations = {}",
+                thread::current().id(),
+                solver.conflicts(),
+                solver.decisions(),
+                solver.propagations(),
+            );
+        })
+    };
 
     let mut run_number = 0;
     loop {
@@ -419,6 +459,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                                         write_clause(f, &lemma)?;
                                     }
                                     searcher.solver.add_clause(&lemma);
+                                    pool.broadcast(Message::Clause(lemma.clone()));
                                     all_derived_clauses.push(lemma);
                                     num_added += 1;
                                 }
@@ -452,6 +493,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                             write_clause(f, &[lit])?;
                         }
                         searcher.solver.add_clause(&[lit]);
+                        pool.broadcast(Message::Clause(vec![lit]));
                         all_derived_clauses.push(vec![lit]);
                     }
                 }
@@ -486,6 +528,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                             write_clause(f, &lemma)?;
                         }
                         new_clauses.push(lemma.clone());
+                        pool.broadcast(Message::Clause(lemma.clone()));
                         all_derived_clauses.push(lemma);
                     }
                 }
@@ -649,6 +692,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                                         write_clause(f, &lemma)?;
                                     }
                                     searcher.solver.add_clause(&lemma);
+                                    pool.broadcast(Message::Clause(lemma.clone()));
                                     all_derived_clauses.push(lemma);
                                     num_added += 1;
                                 }
@@ -706,6 +750,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                             write_clause(f, &[lit])?;
                         }
                         searcher.solver.add_clause(&[lit]);
+                        pool.broadcast(Message::Clause(vec![lit]));
                         all_derived_clauses.push(vec![lit]);
                     }
                 }
@@ -739,6 +784,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                             write_clause(f, &lemma)?;
                         }
                         new_clauses.push(lemma.clone());
+                        pool.broadcast(Message::Clause(lemma.clone()));
                         all_derived_clauses.push(lemma);
                     }
                 }
@@ -818,15 +864,15 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         //         .collect();
         // });
 
-        for (i, cube) in cubes_product.into_iter().enumerate() {
-            pool.submit(CubeTask::new(i, cube));
+        for cube in cubes_product {
+            pool.submit(Message::Cube(cube));
         }
         let pb = ProgressBar::new(num_cubes_before_filtering as u64);
         let results = pool.join().take(num_cubes_before_filtering).progress_with(pb).collect_vec();
 
         cubes_product = results
             .into_iter()
-            .filter_map(|(task, res, _time)| {
+            .filter_map(|(cube, res, _time)| {
                 match res {
                     SolveResponse::Sat => {
                         panic!("Unexpected SAT");
@@ -837,7 +883,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                     }
                     SolveResponse::Interrupted => {
                         // debug!("Cube {} is valid in {:.1}s", display_slice(&task.cube), time.as_secs_f64());
-                        Some(task.cube)
+                        Some(cube)
                     }
                 }
             })
@@ -901,6 +947,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         write_clause(f, &[lit])?;
                     }
                     searcher.solver.add_clause(&[lit]);
+                    pool.broadcast(Message::Clause(vec![lit]));
                     all_derived_clauses.push(vec![lit]);
                 }
             }
@@ -934,6 +981,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         write_clause(f, &lemma)?;
                     }
                     new_clauses.push(lemma.clone());
+                    pool.broadcast(Message::Clause(lemma.clone()));
                     all_derived_clauses.push(lemma);
                 }
             }
