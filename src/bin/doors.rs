@@ -4,13 +4,11 @@ use std::fs::File;
 use std::io::LineWriter;
 use std::io::Write as _;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use clap::Parser;
 use color_eyre::eyre::bail;
-use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 use rayon::prelude::*;
@@ -131,12 +129,6 @@ enum SolveResult {
     SAT(Vec<Lit>),
     UNSAT,
     UNKNOWN,
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Cube(Vec<Lit>),
-    Clause(Vec<Lit>),
 }
 
 fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
@@ -782,11 +774,13 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         let time_filter = Instant::now();
         let num_cubes_before_filtering = cubes_product.len();
 
-        let value = cubes_product.into_par_iter();
+        let cubes_product_par = cubes_product.into_par_iter();
         cubes_product = vec![];
         pool.install(|| {
-            cubes_product = value
+            let pb = ProgressBar::new(num_cubes_before_filtering as u64);
+            cubes_product = cubes_product_par
                 .filter(|cube| {
+                    // let time_solve = Instant::now();
                     let solver = Cadical::new();
                     for clause in all_clauses.iter() {
                         solver.add_clause(lits_to_external(clause));
@@ -796,6 +790,8 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         solver.add_clause([lit.to_external()]);
                     }
                     let res = solver.solve().unwrap();
+                    // let time_solve = time_solve.elapsed();
+                    // debug!("{:?} in {:.3}s, {} conflicts", res, time_solve.as_secs_f64(), solver.conflicts());
                     match res {
                         SolveResponse::Sat => {
                             // TODO: handle SAT
@@ -805,6 +801,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         SolveResponse::Interrupted => true,
                     }
                 })
+                .progress_with(pb)
                 .collect();
         });
 
