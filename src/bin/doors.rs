@@ -11,18 +11,19 @@ use color_eyre::eyre::bail;
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
-use rayon::prelude::*;
+// use rayon::prelude::*;
+
+use cadical::statik::Cadical;
+use cadical::{LitValue, SolveResponse};
 
 use backdoor::derivation::derive_clauses;
 use backdoor::lit::Lit;
+use backdoor::pool::{new_solver_pool, CubeTask};
 use backdoor::searcher::{BackdoorSearcher, Options, DEFAULT_OPTIONS};
 use backdoor::solvers::SatSolver;
 use backdoor::trie::Trie;
 use backdoor::utils::*;
 use backdoor::var::Var;
-
-use cadical::statik::Cadical;
-use cadical::{LitValue, SolveResponse};
 
 // Run this example:
 // cargo run --release --bin doors -- data/mult/lec_CvK_12.cnf --backdoor-size 10 --num-iters 10000 --budget-presolve 10000 --budget-subsolve 10000 -t 4
@@ -235,7 +236,25 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
     // All derived clauses:
     let mut all_derived_clauses: Vec<Vec<Lit>> = Vec::new();
 
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(args.threads).build()?;
+    // let pool = rayon::ThreadPoolBuilder::new().num_threads(args.threads).build()?;
+    let pool = new_solver_pool::<CubeTask, _, _>(
+        args.threads,
+        move |_| {
+            let solver = Cadical::new();
+            for clause in parse_dimacs(&args.path_cnf) {
+                solver.add_clause(lits_to_external(&clause));
+            }
+            solver
+        },
+        move |task, solver| {
+            for &lit in task.cube.iter() {
+                solver.assume(lit.to_external()).unwrap();
+            }
+            solver.limit("conflicts", args.budget_subsolve as i32);
+            let res = solver.solve().unwrap();
+            res
+        },
+    );
 
     let mut run_number = 0;
     loop {
@@ -773,31 +792,56 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         let time_filter = Instant::now();
         let num_cubes_before_filtering = cubes_product.len();
 
-        let value = cubes_product.into_par_iter();
-        cubes_product = vec![];
-        pool.install(|| {
-            cubes_product = value
-                .filter(|cube| {
-                    let solver = Cadical::new();
-                    for clause in all_clauses.iter() {
-                        solver.add_clause(lits_to_external(clause));
+        // let value = cubes_product.into_par_iter();
+        // cubes_product = vec![];
+        // pool.install(|| {
+        //     cubes_product = value
+        //         .filter(|cube| {
+        //             let solver = Cadical::new();
+        //             for clause in all_clauses.iter() {
+        //                 solver.add_clause(lits_to_external(clause));
+        //             }
+        //             solver.limit("conflicts", args.budget_subsolve as i32);
+        //             for &lit in cube.iter() {
+        //                 solver.add_clause([lit.to_external()]);
+        //             }
+        //             let res = solver.solve().unwrap();
+        //             match res {
+        //                 SolveResponse::Sat => {
+        //                     // TODO: handle SAT
+        //                     panic!("Unexpected SAT");
+        //                 }
+        //                 SolveResponse::Unsat => false,
+        //                 SolveResponse::Interrupted => true,
+        //             }
+        //         })
+        //         .collect();
+        // });
+
+        for (i, cube) in cubes_product.into_iter().enumerate() {
+            pool.submit(CubeTask::new(i, cube));
+        }
+        let pb = ProgressBar::new(num_cubes_before_filtering as u64);
+        let results = pool.join().take(num_cubes_before_filtering).progress_with(pb).collect_vec();
+
+        cubes_product = results
+            .into_iter()
+            .filter_map(|(task, res, _time)| {
+                match res {
+                    SolveResponse::Sat => {
+                        panic!("Unexpected SAT");
                     }
-                    solver.limit("conflicts", args.budget_subsolve as i32);
-                    for &lit in cube.iter() {
-                        solver.add_clause([lit.to_external()]);
+                    SolveResponse::Unsat => {
+                        // debug!("Cube {} is invalid in {:.1}s", display_slice(&task.cube), time.as_secs_f64());
+                        None
                     }
-                    let res = solver.solve().unwrap();
-                    match res {
-                        SolveResponse::Sat => {
-                            // TODO: handle SAT
-                            panic!("Unexpected SAT");
-                        }
-                        SolveResponse::Unsat => false,
-                        SolveResponse::Interrupted => true,
+                    SolveResponse::Interrupted => {
+                        // debug!("Cube {} is valid in {:.1}s", display_slice(&task.cube), time.as_secs_f64());
+                        Some(task.cube)
                     }
-                })
-                .collect();
-        });
+                }
+            })
+            .collect();
 
         let time_filter = time_filter.elapsed();
         debug!(
