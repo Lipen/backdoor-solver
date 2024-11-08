@@ -777,10 +777,10 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         let cubes_product_par = cubes_product.into_par_iter();
         cubes_product = vec![];
         pool.install(|| {
-            let pb = ProgressBar::new(num_cubes_before_filtering as u64);
+            // let pb = ProgressBar::new(num_cubes_before_filtering as u64);
             cubes_product = cubes_product_par
                 .filter(|cube| {
-                    // let time_solve = Instant::now();
+                    let time_solve = Instant::now();
                     let solver = Cadical::new();
                     for clause in all_clauses.iter() {
                         solver.add_clause(lits_to_external(clause));
@@ -790,8 +790,8 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         solver.add_clause([lit.to_external()]);
                     }
                     let res = solver.solve().unwrap();
-                    // let time_solve = time_solve.elapsed();
-                    // debug!("{:?} in {:.3}s, {} conflicts", res, time_solve.as_secs_f64(), solver.conflicts());
+                    let time_solve = time_solve.elapsed();
+                    debug!("{:?} in {:.3}s, {} conflicts", res, time_solve.as_secs_f64(), solver.conflicts());
                     match res {
                         SolveResponse::Sat => {
                             // TODO: handle SAT
@@ -801,7 +801,7 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                         SolveResponse::Interrupted => true,
                     }
                 })
-                .progress_with(pb)
+                // .progress_with(pb)
                 .collect();
         });
 
