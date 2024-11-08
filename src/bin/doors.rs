@@ -781,17 +781,35 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
             cubes_product = cubes_product_par
                 .filter(|cube| {
                     let time_solve = Instant::now();
+
                     let solver = Cadical::new();
-                    for clause in all_clauses.iter() {
+                    // for clause in all_clauses.iter() {
+                    //     solver.add_clause(lits_to_external(clause));
+                    // }
+                    for clause in parse_dimacs(&args.path_cnf) {
+                        solver.add_clause(lits_to_external(&clause));
+                    }
+                    for clause in all_derived_clauses.iter() {
                         solver.add_clause(lits_to_external(clause));
                     }
-                    solver.limit("conflicts", args.budget_subsolve as i32);
                     for &lit in cube.iter() {
                         solver.add_clause([lit.to_external()]);
                     }
+
+                    // let new = Cadical::new();
+                    // solver.copy_to(&new);
+                    // let solver = new;
+
+                    solver.limit("conflicts", args.budget_subsolve as i32);
                     let res = solver.solve().unwrap();
                     let time_solve = time_solve.elapsed();
-                    debug!("{:?} in {:.3}s, {} conflicts", res, time_solve.as_secs_f64(), solver.conflicts());
+                    debug!(
+                        "{} -> {:?} after {} conflicts in {:.3}s",
+                        display_slice(&cube),
+                        res,
+                        solver.conflicts(),
+                        time_solve.as_secs_f64()
+                    );
                     match res {
                         SolveResponse::Sat => {
                             // TODO: handle SAT
