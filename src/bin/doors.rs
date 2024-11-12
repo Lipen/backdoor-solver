@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use clap::Parser;
 use color_eyre::eyre::bail;
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::{iproduct, zip_eq, Itertools};
 use log::{debug, info};
 use rayon::prelude::*;
@@ -777,10 +777,11 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
         let cubes_product_par = cubes_product.into_par_iter();
         cubes_product = vec![];
         pool.install(|| {
-            // let pb = ProgressBar::new(num_cubes_before_filtering as u64);
+            let pb = ProgressBar::new(num_cubes_before_filtering as u64);
             cubes_product = cubes_product_par
                 .filter(|cube| {
-                    let time_solve = Instant::now();
+                    pb.inc(1);
+                    // let time_solve = Instant::now();
 
                     let solver = Cadical::new();
                     // for clause in all_clauses.iter() {
@@ -802,14 +803,14 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
 
                     solver.limit("conflicts", args.budget_subsolve as i32);
                     let res = solver.solve().unwrap();
-                    let time_solve = time_solve.elapsed();
-                    debug!(
-                        "{} -> {:?} after {} conflicts in {:.3}s",
-                        display_slice(&cube),
-                        res,
-                        solver.conflicts(),
-                        time_solve.as_secs_f64()
-                    );
+                    // let time_solve = time_solve.elapsed();
+                    // pb.println(format!(
+                    //     "{} -> {:?} after {} conflicts in {:.3}s",
+                    //     display_slice(&cube),
+                    //     res,
+                    //     solver.conflicts(),
+                    //     time_solve.as_secs_f64()
+                    // ));
                     match res {
                         SolveResponse::Sat => {
                             // TODO: handle SAT
