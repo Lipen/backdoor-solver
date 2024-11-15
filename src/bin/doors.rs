@@ -103,6 +103,10 @@ struct Cli {
     #[arg(long, value_name = "INT", default_value_t = 10000)]
     budget_intersolve: u64,
 
+    /// Budget (in conflicts) for solving phase.
+    #[arg(long, value_name = "INT", default_value_t = 0)]
+    budget_solve: u64,
+
     /// Do compute cores for easy tasks and invalid cubes.
     #[arg(long)]
     compute_cores: bool,
@@ -979,25 +983,62 @@ fn solve(args: Cli) -> color_eyre::Result<SolveResult> {
                     }
                 }
             }
+        }
 
-            // Populate the set of ALL clauses:
+        if args.budget_solve > 0 {
+            info!("Just solving with {} conflicts budget...", args.budget_solve);
             match &mut searcher.solver {
                 SatSolver::Cadical(solver) => {
-                    debug!("Retrieving clauses from the solver...");
-                    let time_extract = Instant::now();
-                    let mut num_new = 0;
-                    for clause in solver.extract_clauses(true) {
-                        let mut clause = lits_from_external(clause);
-                        clause.sort_by_key(|lit| lit.inner());
-                        if all_clauses.insert(clause) {
-                            num_new += 1;
+                    solver.reset_assumptions();
+                    solver.limit("conflicts", args.budget_solve as i32);
+                    let time_solve = Instant::now();
+                    let res = solver.solve()?;
+                    let time_solve = time_solve.elapsed();
+                    match res {
+                        SolveResponse::Interrupted => {
+                            info!("UNKNOWN in {:.1} s", time_solve.as_secs_f64());
+                            // do nothing
+                        }
+                        SolveResponse::Unsat => {
+                            info!("UNSAT in {:.1} s", time_solve.as_secs_f64());
+                            return Ok(SolveResult::UNSAT);
+                        }
+                        SolveResponse::Sat => {
+                            info!("SAT in {:.1} s", time_solve.as_secs_f64());
+                            let model = (1..=solver.vars())
+                                .map(|i| {
+                                    let v = Var::from_external(i as u32);
+                                    match solver.val(i as i32).unwrap() {
+                                        LitValue::True => Lit::new(v, false),
+                                        LitValue::False => Lit::new(v, true),
+                                    }
+                                })
+                                .collect_vec();
+                            return Ok(SolveResult::SAT(model));
                         }
                     }
-                    let time_extract = time_extract.elapsed();
-                    debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
+                    solver.internal_backtrack(0);
                 }
-            };
+            }
         }
+
+        // Populate the set of ALL clauses:
+        match &mut searcher.solver {
+            SatSolver::Cadical(solver) => {
+                debug!("Retrieving clauses from the solver...");
+                let time_extract = Instant::now();
+                let mut num_new = 0;
+                for clause in solver.extract_clauses(true) {
+                    let mut clause = lits_from_external(clause);
+                    clause.sort_by_key(|lit| lit.inner());
+                    if all_clauses.insert(clause) {
+                        num_new += 1;
+                    }
+                }
+                let time_extract = time_extract.elapsed();
+                debug!("Extracted {} new clauses in {:.1}s", num_new, time_extract.as_secs_f64());
+            }
+        };
 
         let time_run = time_run.elapsed();
         info!("Done run {} in {:.1}s", run_number, time_run.as_secs_f64());
