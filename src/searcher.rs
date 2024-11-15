@@ -11,6 +11,7 @@ use crate::backdoor::Backdoor;
 use crate::fitness::Fitness;
 use crate::lit::Lit;
 use crate::solvers::SatSolver;
+// use crate::utils::*;
 use crate::var::Var;
 
 #[derive(Debug)]
@@ -95,6 +96,10 @@ impl BackdoorSearcher {
         let mut pool = self.global_pool.clone();
         // Exclude banned variables from the pool:
         pool.retain(|v| !self.banned_vars.contains(v));
+
+        // let mut top_score_vars = vars_from_external(self.solver.as_cadical().get_top_score_variables(1000).iter().copied());
+        // top_score_vars.retain(|v| pool.contains(v));
+        // pool = top_score_vars.into_iter().take(100).collect();
 
         debug!("Pool size: {}", pool.len());
         if pool.len() < backdoor_size {
