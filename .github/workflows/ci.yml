@@ -44,18 +44,5 @@ jobs:
       - name: Build all
         run: cargo build --workspace
 
-      - name: Build and install Cadical shared library (libcadical.so)
-        working-directory: lib/cadical-sys/vendor/cadical
-        run: |
-          ./configure -fPIC
-          make -j8 shared
-          sudo install -m 644 build/libcadical.so -Dt /usr/local/lib
-
-      - name: Run ldconfig and update LD_LIBRARY_PATH
-        run: |
-          sudo ldconfig -n /usr/local/lib
-          ldconfig -p
-          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}/usr/local/lib" >> $GITHUB_ENV
-
       - name: Test all
         run: cargo test --workspace --lib --bins --tests --examples
