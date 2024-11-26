@@ -1,0 +1,3 @@
+[submodule "sat-nexus"]
+	path = sat-nexus
+	url = https://github.com/Lipen/sat-nexus
