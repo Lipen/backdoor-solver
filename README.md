@@ -11,13 +11,16 @@
 ## Setup
 
 ```sh
-git clone https://github.com/Lipen/backdoor-solver
+git clone --recurse-submodules -j4 https://github.com/Lipen/backdoor-solver
 cd backdoor-solver
-git submodule update --init --recursive --progress
 cargo check --workspace --lib --bins --tests
 ```
 
 Do not forget to update submodules every time you switch branches!
+
+```sh
+git submodule update --init --recursive --progress
+```
 
 Below, you can find instructions on how to use different components provided in this repository, for example, SAT solver and backdoor searcher.
 
@@ -138,7 +141,7 @@ cargo run --release --bin search -- data/mult/lec_CvK_12.cnf --backdoor-size 10 
 
 `output.txt` might look like:
 ```
-ackdoor [4242, 4919, 2082, 1920, 4969, 5082, 4903, 2163, 2154, 4071] of size 10 on iter 829 with fitness = 0.029296875, rho = 0.970703125, hard = 30 in 120.671 ms
+Backdoor [4242, 4919, 2082, 1920, 4969, 5082, 4903, 2163, 2154, 4071] of size 10 on iter 829 with fitness = 0.029296875, rho = 0.970703125, hard = 30 in 120.671 ms
 Backdoor [5089, 3989, 3375, 4265, 2163, 4273, 2648, 4158, 2082, 3133] of size 10 on iter 935 with fitness = 0.009765625, rho = 0.990234375, hard = 10 in 99.219 ms
 Backdoor [4022, 4034, 4475, 4383, 2606, 4902, 1895, 960, 3538, 2471] of size 10 on iter 884 with fitness = 0.013671875, rho = 0.986328125, hard = 14 in 70.435 ms
 ```
